@@ -1,5 +1,5 @@
 ---
-title: "Pollution project"
+title: "air Pollution project"
 author: "Amalawa O Ogbomo"
 date: "27/12/2020"
 output: html_document

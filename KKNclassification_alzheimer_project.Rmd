@@ -1,5 +1,5 @@
 ---
-title: "Machine Learning and Data Modelling"
+title: "alzheimer disease diagnosis classification with KNN"
 author: "OGBOMO O AMALAWA"
 date: "26/05/2020"
 output: html_document
