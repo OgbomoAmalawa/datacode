@@ -1,0 +1,154 @@
+---
+title: "Decision Tree"
+author: "Amalawa O Ogbomo  B00804422"
+date: "31/07/2020"
+output: html_document
+---
+
+```{r}
+#install.packages("rpart")
+library(rpart)
+library(readr)
+library(caret)
+#Implementing The Decision Tree
+#Descision Tree
+#install.packages("rpart.plot")
+library(caTools)   
+library(lattice)
+library(e1071)
+library(rpart.plot)
+AIBLSelect<-read.csv("C:/Users/aoogb/Desktop/AIBLSelect.csv", stringsAsFactors = TRUE)
+str(AIBLSelect)
+
+
+shuffle_index <- sample(1:nrow(AIBLSelect))
+head(shuffle_index)
+
+sample_ind <- sample(nrow(AIBLSelect),nrow(AIBLSelect)*0.70)
+train <- AIBLSelect[sample_ind,]
+test <- AIBLSelect[-sample_ind,]
+table(test$DXCURREN)
+table(train$DXCURREN)
+
+
+#Base Model
+baselinemodel <- rpart(DXCURREN~ ., data = train, method = "class",
+                       control = rpart.control(cp = 0))
+baselinemodel
+summary(baselinemodel)
+#Plot Decision Tree
+plot(baselinemodel)
+# Examine the complexity plot
+printcp(baselinemodel)
+plotcp(baselinemodel)
+
+test$pred_baseline <- predict(baselinemodel, test, type = "class")
+base_accuracy <- mean(test$pred_baseline == test$DXCURREN)
+base_accuracy
+#pre-prunning 
+# Grow a tree with minsplit of 100 and max depth of 8
+model_prep <- rpart(DXCURREN ~ ., data = train, method = "class", 
+                   control = rpart.control(cp = 0, maxdepth = 8,minsplit = 100))
+# Compute the accuracy of the pruned tree
+test$pred_prep <- predict(model_prep, test, type = "class")
+accuracy_prep <- mean(test$pred_prep == test$DXCURREN)
+accuracy_prep
+
+#Postpruning
+# Prune the hr_base_model based on the optimal cp value
+mypronedmodel <- prune(baselinemodel, cp = 0.0084 )
+# Computing the accuracy of the pruned tree
+test$pred_myprone <- predict(mypronedmodel, test, type = "class")
+accuracy_post <- mean(test$pred_myprone == test$DXCURREN)
+data.frame(base_accuracy, accuracy_prep, accuracy_post)
+
+table(test$pred_baseline, test$DXCURREN)
+table(test$pred_prep, test$DXCURREN)
+table(test$pred_myprone, test$DXCURREN)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+truth <- factor(rep(lvs, times = c(68, 178)),
+                levels = rev(lvs))
+test$pred_myprone<- factor(
+               c(
+                 rep(lvs, times = c(68, 0)),
+                 rep(lvs, times = c(0, 178))),               
+               levels = rev(lvs))
+xtab <- table(test$pred_myprone, truth)
+# load Caret package for computing Confusion matrix
+
+caret::confusionMatrix(xtab)
+
+result <- confusionMatrix(test$pred_myprone, truth)
+result
+precision <- result$byClass['Pos Pred Value']
+precision 
+recall <- result$byClass['Sensitivity']
+recall
+```
+
+
+```{r}
+#balancing the output class
+library(MASS)
+library(DMwR)
+AIBLSelect
+AIBLSelect$DXCURREN<-as.factor(AIBLSelect$DXCURREN)
+balanceddata<- SMOTE(DXCURREN ~ .,AIBLSelect, perc.over =80,perc.under=225.5)
+
+#table(AIBLSelect$DXCURREN)#compare with unbalance data 
+table(balanceddata$DXCURREN)
+table(AIBLSelect$DXCURREN)
+#run with balance data
+sample_ind <- sample(nrow(balanceddata),nrow(balanceddata)*0.70)
+trainbalance <- balanceddata[sample_ind,]
+testbalance <- balanceddata[-sample_ind,]
+table(trainbalance$DXCURREN)
+table(testbalance$DXCURREN)
+
+
+
+baselinemodel2 <- rpart(DXCURREN~ ., data = trainbalance, method = "class",
+                       control = rpart.control(cp = 0))
+baselinemodel2
+
+test$prep<- predict(baselinemodel2, test, type = "class")
+test$prep
+testbalance$DXCURREN
+base_accuracy2 <- mean(test$prep== testbalance$DXCURREN)
+base_accuracy2
+
+
+
+mypronedmodel2 <- prune(baselinemodel2, cp = 0.0084 )
+# Computing the accuracy of the pruned tree
+test$pred_myprone2 <- predict(mypronedmodel2, test, type = "class")
+accuracy_post2 <- mean(test$pred_myprone2 == testbalance$DXCURREN)
+accuracy_post2
+
+data.frame(base_accuracy2,accuracy_post2)
+
+table(test$prep, testbalance$DXCURREN)
+table(test$pred_myprone2,testbalance$DXCURREN)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+truth <- factor(rep(lvs, times = c(60, 186)),
+                levels = rev(lvs))
+test$pred_myprone2<- factor(
+               c(
+                 rep(lvs, times = c(21, 39)),
+                 rep(lvs, times = c(91, 95))),               
+               levels = rev(lvs))
+xtab <- table(test$pred_myprone2, truth)
+# load Caret package for computing Confusion matrix
+
+caret::confusionMatrix(xtab)
+
+result <- confusionMatrix(test$pred_myprone2, truth)
+result
+precision <- result$byClass['Pos Pred Value']
+precision 
+recall <- result$byClass['Sensitivity']
+recall
+```
+

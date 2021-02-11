@@ -1,0 +1,241 @@
+---
+title: "machinelearning neural network"
+author: "Amalawa O Ogbomo  B00804422"
+date: "28/07/2020"
+output: html_document
+---
+
+
+```{r}
+library(readr)
+library(corrplot)
+#install.packages("caret")
+library(caret)
+#install.packages("e1071")
+library(e1071)
+library(data.table)
+AIBLSelect <- read.csv("C:/Users/aoogb/Desktop/AIBLSelect.csv", stringsAsFactors = TRUE)
+AIBLSelect
+
+
+str(AIBLSelect$DXCURREN)
+# Convert features to numeric 
+
+ AIBLSelect[1:9]<- lapply(AIBLSelect, function(x){
+  if(is.integer(x)) as.numeric(as.character(x)) else x
+})
+
+ str(AIBLSelect)
+# custom normalization function
+normalize <- function(x) { 
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+str(AIBLSelect$DXCURREN)
+# apply normalization to entire data frame (you may also try to used un-normalised data to see how the results look like)
+AIBLSelect_norm <- as.data.frame(lapply(AIBLSelect, normalize))
+
+# confirm that the range is now between zero and one
+summary(AIBLSelect_norm$DXCURREN)
+
+# compared to the original minimum and maximum
+summary(AIBLSelect$DXCURREN)
+dim(AIBLSelect)
+# create training and test data (you may wish to use k-fold cross validation to get a validated result)
+AIBLSelect_train <- AIBLSelect_norm[1:410, ]
+AIBLSelect_test <- AIBLSelect_norm[411:820, ]
+AIBLSelect_test$DXCURREN
+table(AIBLSelect_test$DXCURREN)
+## Step 3: Training a model on the data ----
+# train the neuralnet model
+library(neuralnet)
+# simple ANN with only a single hidden neuron
+set.seed(12345) # to guarantee repeatable results
+AIBLSelect_model7 <- neuralnet(DXCURREN ~ ., data = AIBLSelect_train)
+# plot the network
+plot(AIBLSelect_model7)
+
+#  Evaluating model performance
+model_results7 <- neuralnet::compute(AIBLSelect_model7,AIBLSelect_test[2:9])
+predicted_strength7 <- model_results7$net.result
+corDX<-cor(predicted_strength7, AIBLSelect_test$DXCURREN)
+corDX
+results7 <- data.frame(actual7 = AIBLSelect_test $DXCURREN, prediction7 = predicted_strength7)
+roundedresults7<-sapply(results7,round,digits=0)
+results7
+roundedresults7<-sapply(results7,round,digits=0)
+roundedresultsdf7=data.frame(roundedresults7)
+attach(roundedresultsdf7)
+table(actual7,prediction7)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+actual7 <- factor(rep(lvs, times = c(323, 87)),
+                levels = rev(lvs))
+prediction7 <- factor(
+               c(
+                 rep(lvs, times = c(309,   14)),
+                 rep(lvs, times = c(8, 79))),               
+               levels = rev(lvs))
+xtab <- table(prediction7, actual7)
+#install.packages("caret")
+library(caret)
+
+caret::confusionMatrix(xtab)
+
+output1<- confusionMatrix(prediction7, actual7)
+output1
+precision <-output1$byClass['Pos Pred Value']
+precision 
+recall <- output1$byClass['Sensitivity']
+recall
+
+
+```
+
+```{r}
+ 
+set.seed(12345) # to guarantee repeatable results
+AIBLSelect_model2 <- neuralnet(DXCURREN ~ ., data = AIBLSelect_train, hidden = 2)
+# plot the network
+plot(AIBLSelect_model2)
+
+# evaluate the results as we did before
+model_results2 <- neuralnet::compute(AIBLSelect_model2,AIBLSelect_test[2:9])
+predicted_strength2 <- model_results2$net.result
+corDX<-cor(predicted_strength2, AIBLSelect_test$DXCURREN)
+corDX
+
+results2 <- data.frame(actual2 = AIBLSelect_test $DXCURREN, prediction2 = predicted_strength2)
+roundedresults2<-sapply(results2,round,digits=0)
+results2
+roundedresults2<-sapply(results2,round,digits=0)
+roundedresultsdf2=data.frame(roundedresults2)
+attach(roundedresultsdf2)
+
+table(actual2,prediction2)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+actual2 <- factor(rep(lvs, times = c(323, 87)),
+                levels = rev(lvs))
+prediction2 <- factor(
+               c(
+                 rep(lvs, times = c(309,   14)),
+                 rep(lvs, times = c(8, 79))),               
+               levels = rev(lvs))
+xtab <- table(prediction2, actual2)
+#install.packages("caret")
+library(caret)
+
+caret::confusionMatrix(xtab)
+
+output2 <- confusionMatrix(prediction2, actual2)
+output2
+precision2 <- output2$byClass['Pos Pred Value']
+precision2 
+recall2 <- output2$byClass['Sensitivity']
+recall2
+
+```
+
+
+```{r}
+set.seed(12345) # to guarantee repeatable results
+AIBLSelect_mod <- neuralnet(DXCURREN ~ ., data = AIBLSelect_train, hidden =c(2,3))
+# plot the network
+plot(AIBLSelect_mod)
+```
+
+```{r}
+# evaluate the results as we did before
+library(neuralnet)
+model_results3 <- neuralnet::compute(AIBLSelect_mod,AIBLSelect_test[2:9])
+predicted<- model_results3$net.result
+correla<-cor(predicted, AIBLSelect_test$DXCURREN)
+
+correla
+results3 <- data.frame(actual3= AIBLSelect_test $DXCURREN, prediction3= predicted)
+roundedresults3<-sapply(results3,round,digits=0)
+results3
+roundedresults3<-sapply(results3,round,digits=0)
+roundedresultsdf3=data.frame(roundedresults3)
+attach(roundedresultsdf3)
+table(actual3,prediction3)
+```
+```{r}
+library(MASS)
+library(DMwR)
+library(caret)
+AIBLSelect
+AIBLSelect$DXCURREN<-as.factor(AIBLSelect$DXCURREN)
+balanceddata<- SMOTE(DXCURREN ~ .,AIBLSelect, perc.over =80,perc.under=225.5)
+
+#table(AIBLSelect$DXCURREN)#compare with unbalance data 
+table(balanceddata$DXCURREN)
+balanceddata$DXCURREN<-as.numeric(as.character(balanceddata$DXCURREN))
+
+str(balanceddata)
+balanceddata_norm <- as.data.frame(lapply(balanceddata, normalize))
+
+# confirm that the range is now between zero and one
+summary(balanceddata_norm$DXCURREN)
+
+# compared to the original minimum and maximum
+summary(balanceddata$DXCURREN)
+dim(balanceddata)
+# create training and test data (you may wish to use k-fold cross validation to get a validated result)
+balanceddata_train <- balanceddata_norm[1:410, ]
+balanceddata_test <- balanceddata_norm[411:820, ]
+balanceddata_test$DXCURREN
+table(balanceddata_test$DXCURREN)
+## Step 3: Training a model on the data ----
+# train the neuralnet model
+library(neuralnet)
+# simple ANN with only a single hidden neuron
+set.seed(12345) # to guarantee repeatable results
+balanceddata_model7 <- neuralnet(DXCURREN ~ ., data = balanceddata_train)
+# plot the network
+plot(balanceddata_model7)
+
+#  Evaluating model performance
+model_results7 <- neuralnet::compute(balanceddata_model7,balanceddata_test[2:9])
+predicted_strengthb <- model_results7$net.result
+predicted_strengthb
+balanceddata_test$DXCURREN
+corDX<-cor(predicted_strengthb, balanceddata_test$DXCURREN)
+corDX
+results7 <- data.frame(actualb =balanceddata_test $DXCURREN, predictionb = predicted_strengthb)
+roundedresults7<-sapply(results7,round,digits=0)
+results7
+roundedresults7<-sapply(results7,round,digits=0)
+roundedresultsdf7=data.frame(roundedresults7)
+attach(roundedresultsdf7)
+
+#Accuracy
+mean(predictionb==actualb)
+#confusionMatrix
+table(actualb,predictionb)
+lvs <- c("Healthy Control", "Non Healthy Control")
+actualb <- factor(rep(lvs, times = c(87, 323)),
+                levels = rev(lvs))
+predictionb <- factor(
+               c(
+                 rep(lvs, times = c(79,   8)),
+                 rep(lvs, times = c(14, 309))),               
+               levels = rev(lvs))
+xtab <- table(predictionb, actualb)
+#install.packages("caret")
+library(caret)
+
+caret::confusionMatrix(xtab)
+
+outputb<- confusionMatrix(predictionb, actualb)
+outputb
+precisionb <-outputb$byClass['Pos Pred Value']
+precisionb 
+recallb <- outputb$byClass['Sensitivity']
+recallb
+
+
+```
+
+

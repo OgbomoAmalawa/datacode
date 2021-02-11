@@ -1,0 +1,177 @@
+---
+title: "MSc Data Science - COM737 Machine Learning and Data Modelling 2019/20"
+author: "Amalawa O Ogbomo  B00804422"
+date: "24/07/2020"
+output: html_document
+---
+
+```{r}
+#install.packages("readr")
+library(readr)
+#install.packages("rio")
+library(rio)
+#install.packages("openxlsx")
+library(openxlsx)
+#install.packages("dplyr")
+library(dplyr)
+#install.packages(tidyselect"")
+library(tidyselect)
+library(e1071)
+```
+
+```{r}
+
+# We apply logistic regression 
+#install.packages("tidyverse")
+library(tidyverse)
+#install.packages("caret")
+library(caret)
+#install.packages("data.table")
+library(data.table)
+AIBLSelect<-read.csv("C:/Users/aoogb/Desktop/AIBLSelect.csv", stringsAsFactors = TRUE)
+AIBLSelect
+AIBLSelect$DXCURREN<-as.factor(AIBLSelect$DXCURREN)
+table(AIBLSelect$DXCURREN)
+str(AIBLSelect)
+library(MASS)
+shuffle_index <- sample(1:nrow(AIBLSelect))
+head(shuffle_index)
+library(caTools)
+
+set.seed(150)    
+split=sample.split(AIBLSelect, SplitRatio = 0.8)  # Splitting data into training and test dataset
+trainingset=subset(AIBLSelect,split==TRUE)       # Training dataset
+testset=subset(AIBLSelect,split==FALSE)          # Test dataset
+dim(trainingset)
+dim(testset)
+table(testset$DXCURREN)
+#Simple logistic model
+model1 <- glm( DXCURREN ~., data = trainingset, family = binomial(logit), maxit = 100)
+summary(model1)$coef
+coef(model1)
+summary(model1 )$coef
+probabilities <- model1 %>% predict(testset, type = "response")
+head(probabilities)
+
+predicted.classes1 <- ifelse(probabilities > 0.5, "Heatlthy Control", "Non Healthy Control")
+predicted.classes1
+# Model accuracy
+mean(predicted.classes1 == testset$DXCURREN)
+table(predicted.classes1, testset$DXCURREN)
+
+
+lvs <- c("Healthy Control", "non Healthy Control")
+truth1 <- factor(rep(lvs, times = c(138, 44)),
+                levels = rev(lvs))
+predicted.classes1 <- factor(
+               c(
+                 rep(lvs, times = c(0, 138)),
+                 rep(lvs, times = c(44, 0))),               
+               levels = rev(lvs))
+xtab <- table(predicted.classes1, truth1)
+# load Caret package for computing Confusion matrix
+
+caret::confusionMatrix(xtab)
+result1 <- confusionMatrix(predicted.classes1, truth1)
+result1
+precision1 <- result1$byClass['Pos Pred Value']
+precision1 
+recall1 <- result1$byClass['Sensitivity']
+recall1
+```
+
+
+```{r}
+#training.samples<-
+
+set.seed(123)
+library(MASS)
+model <- glm( DXCURREN ~., data = trainingset, family = binomial(logit), maxit = 100)
+summary(model)$coef
+coef(model)
+
+new.model <- model %>% stepAIC(trace = FALSE)
+coef(new.model)
+summary(model)$coef
+probabilities <- model %>% predict(testset, type = "response")
+head(probabilities)
+
+predicted.classes <- ifelse(probabilities > 0.5, "HC", "Non HC")
+predicted.classes
+# Model accuracy
+mean(predicted.classes == testset$DXCURREN)
+
+table(predicted.classes,testset$DXCURREN)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+truth <- factor(rep(lvs, times = c(138, 44)),
+                levels = rev(lvs))
+predicted.classes<- factor(
+               c(
+                 rep(lvs, times = c(0, 138)),
+                 rep(lvs, times = c(44, 0))),               
+               levels = rev(lvs))
+xtab <- table(predicted.classes, truth)
+# load Caret package for computing Confusion matrix
+
+caret::confusionMatrix(xtab)
+
+result <- confusionMatrix(predicted.classes, truth)
+result
+precision <- result$byClass['Pos Pred Value']
+precision 
+recall <- result$byClass['Sensitivity']
+recall
+```
+
+
+```{r}
+#balancing the output class
+library(MASS)
+library(DMwR)
+AIBLSelect
+AIBLSelect$DXCURREN<-as.factor(AIBLSelect$DXCURREN)
+balanceddata<- SMOTE(DXCURREN ~ .,AIBLSelect, perc.over =80,perc.under=225.5)
+
+#split data
+set.seed(150)    
+split=sample.split(balanceddata, SplitRatio = 0.8)  # Splitting data into training and test dataset
+trainingset=subset(balanceddata,split==TRUE)       # Training dataset
+testset=subset(balanceddata,split==FALSE)          # Test dataset
+dim(trainingset)
+dim(testset)
+
+#table(AIBLSelect$DXCURREN)#compare with unbalance data 
+table(balanceddata$DXCURREN)
+table(AIBLSelect$DXCURREN)
+
+modelb <- glm( DXCURREN ~., data = trainingset, family = binomial(logit), maxit = 100)
+summary(modelb)$coef
+coef(modelb)
+
+new.modelb <- model %>% stepAIC(trace = FALSE)
+coef(new.modelb)
+summary(modelb)$coef
+probabilities <- modelb %>% predict(testset, type = "response")
+head(probabilities)
+
+predicted.balclass <- ifelse(probabilities > 0.5, "HC", "Non HC")
+predicted.balclass
+# Model accuracy
+mean(predicted.balclass == testset$DXCURREN)
+
+table(predicted.balclass,testset$DXCURREN)
+
+lvs <- c("Healthy Control", "Non Healthy Control")
+truth <- factor(rep(lvs, times = c(92, 90)),
+                levels = rev(lvs))
+predicted.balclass<- factor(
+               c(
+                 rep(lvs, times = c(0, 92)),
+                 rep(lvs, times = c(90, 0))),               
+               levels = rev(lvs))
+xtab <- table(predicted.balclass, truth)
+# load Caret package for computing Confusion matrix
+
+caret::confusionMatrix(xtab)
+```

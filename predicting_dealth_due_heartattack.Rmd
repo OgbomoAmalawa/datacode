@@ -1,0 +1,1532 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(readr)
+library(data.table)
+library(ggpubr)
+library(ggrepel)
+library(grDevices)
+library(ggbiplot)
+library(tibble)
+library(Hmisc)
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+library(tidyr)
+library(ISwR)
+library(GGally)
+library(cdata)
+library(wrapr)
+
+
+HeartData<-read.csv("C:/Users/aoogb/Desktop/heart_failure_clinical_records_dataset.csv", stringsAsFactors = TRUE)
+HeartData
+#Check for special, missing , finite elements to make sure Data is clean by creating a function is.dirtydata,  if not we apply cleaning techniques 
+# analysis and  prediction of  heart attack leading to dealth of patients 
+#Application of Statistical Modelling and  machine learning in reducing the dealth of patients due to heart attack 
+
+is.dirtydata <- function(n){ 
+  if (is.numeric(n)) !is.finite(n) else is.na(n)}
+sapply(HeartData, is.dirtydata)
+summary(HeartData)
+str(HeartData)
+
+str(HeartData)
+  summary(HeartData)
+  HeartData[]<- lapply(HeartData, function(x) {
+  if(!is.numeric(x)|is.integer(x)) as.numeric(as.character(x)) else x
+ })
+sapply(HeartData, class)
+  
+str(HeartData)
+
+```
+
+```{r}
+HeartData$DEATH_EVENT 
+ggplot(HeartData, 
+       aes(x = DEATH_EVENT, 
+           y = ..count.. / sum(..count..))) + 
+  geom_bar() +
+  geom_bar(fill = "#0073C2FF") +
+  labs(x = "DEATH_EVENT", 
+       y = "Percentage", 
+       title  = "Dealth due to Heart attack") +
+  scale_y_continuous(labels = scales::percent)
+
+plotdata<-HeartData%>%
+  dplyr::count(DEATH_EVENT) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+plotdata
+
+
+ggplot(plotdata, 
+       aes(x = reorder(DEATH_EVENT, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DEATH_EVENT", 
+       y = "Percentage",
+        title  = "Dealth due to Heart attack")
+
+HeartData<-HeartData%>%dplyr::select(HeartData$DEALTH_EVENT,everything())
+```
+
+
+
+
+```{r}
+ # firstly we Reshape our data
+#install.packages("reshape2")                            
+library("reshape2")
+HeartData_long <- melt(HeartData, id = "DEATH_EVENT")                           
+head(HeartData_long)
+HeartData
+str(HeartData)
+##outlier detection using box plot 
+library(ggplot2)
+ggplot(HeartData_long, aes(x = variable, y = value, fill=factor(DEATH_EVENT))) +            # Applying ggplot function
+      geom_boxplot(width=0.5, alpha=5.0, varwidth=T)+
+      stat_summary(fun.y=mean, geom="point", shape=25, size=2, color="white")+
+      coord_flip()
+
+ggplot(HeartData_long, aes(x = variable, y = value, fill=factor(DEATH_EVENT))) +            # Applying ggplot function
+      geom_boxplot(width=0.5, alpha=5.0, varwidth=T)+
+      stat_summary(fun.y=mean, geom="point", shape=25, size=2, color="white")+
+      coord_flip(ylim = c(0.0, 2000), xlim = c(0,10))
+
+ggplot(HeartData_long, aes(x = variable, y = value, fill=factor(DEATH_EVENT))) +            # Applying ggplot function
+      geom_boxplot(width=0.5, alpha=5.0, varwidth=T)+
+      stat_summary(fun.y=mean, geom="point", shape=25, size=2, color="white")+
+      coord_flip(ylim = c(0.0, 500), xlim = c(0,10))
+```
+
+
+
+
+```{r}
+HeartData$DEATH_EVENT<-as.factor(HeartData$DEATH_EVENT)
+str(HeartData)
+HeartData$DEATH_EVENT
+HeartData$DEATH_EVENT<- factor(HeartData$DEATH_EVENT, levels=c('0','1'))
+attributes(HeartData$DEATH_EVENT)
+str(HeartData)
+HeartData$DEATH_EVENT
+table(HeartData$DEATH_EVENT)
+#Dealth due to Heart attack is 1 and Alive from heart attack is 0.
+HeartData
+```
+
+```{r}
+str(HeartData)
+HeartData$age
+summary(HeartData$age)
+#check for outliers 
+ outlier_age<- boxplot.stats(HeartData$age,coef=2)$out
+ outlier_age
+ shapiro.test(HeartData$age)
+ 
+ 
+#the null hypothesis for this test is that the variable is normally distributed ,W = 0.97562, p-value = 7.74e-05, we have sufficient evidence to reject the null hypothesis and conclude that this age variable is not normally distributed. 
+    # Transformation
+ HeartData$age<-log(HeartData$age+10)
+ #we use the log transformation
+ #HeartData$age<-1/ (HeartData$age+1)
+ HeartData$age
+ summary(HeartData$age)
+ 
+ density_plotage<-ggplot(HeartData, aes(x = age)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "age",
+                     breaks = seq(3.5,5, 0.001),
+                     limits=c(3.5,5)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of age") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotage
+
+shaded_areaage<- ggplot_build(density_plotage)$data[[1]] %>% 
+  filter(x < mean(HeartData$age))
+
+density_plot_age_shaded<-density_plotage + 
+  geom_area(data = shaded_areaage, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_age_shaded
+
+
+summary(HeartData$age)
+#mean and median are close  
+median_line_age <- 
+  ggplot_build(density_plotage)$data[[1]] %>% 
+  filter(x <= median(HeartData$age))
+median_line_age
+
+density_plot_age_shaded + 
+  geom_area(data = median_line_age, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, age), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=age, ymax=age,y=age), width = 0.5)+
+  ggtitle("Density plot of age")
+```
+
+```{r}
+#categorecal variable anaemia
+HeartData$anaemia<-as.factor(HeartData$anaemia)
+summary(HeartData$anaemia)
+
+anaemiadata<-HeartData %>%
+  dplyr::count(anaemia) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+anaemiadata
+
+ggplot(anaemiadata, 
+       aes(x = reorder(anaemia, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "anaemia", 
+       y = "Percentage", 
+       title  = "Plot of anaemia")
+
+
+ggboxplot(HeartData, x = "DEATH_EVENT", y = "anaemia", 
+          color = "DEATH_EVENT", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "anaemia", xlab = "DEALTH due to heart attack")
+
+ggplot(HeartData, 
+       aes(x = anaemia, 
+           fill = DEATH_EVENT)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+# the chi square test, a non-parametric statistic to determine if there is a correlation between diabeties and dealths due to heart attack
+# Create a data frame from the main data set.
+anaemia_data<- data.frame(HeartData$anaemia,HeartData$DEATH_EVENT)
+
+# Create a table with the needed variables.
+anaemia_data = table(HeartData$anaemia,HeartData$DEATH_EVENT) 
+print(anaemia_data)
+anaemiachisq<-chisq.test(anaemia_data)
+# Perform the Chi-Square test.
+print(anaemiachisq)
+
+anaemiachisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = X-squared = 1.0422, df = 1, p-value = 0.3073, If we assume predetermined level of significance to be 0.05 then we fail to reject the null hypothesis, the null hypothesis of a chi square goodness of fit test is that there is a relationship between the categorical varables which we will see from the corelation plot. 
+
+
+anaemiachisq$observed
+anaemiachisq$expected
+round(anaemiachisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(anaemiachisq$observed−anaemiachisq$expected)/√anaemiachisq$observed , this is the literary explanation  we now do it in R program.
+round(anaemiachisq$residuals, 3)
+library(corrplot)
+corrplot(anaemiachisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of anaemia and column variables ofDealth due to heart attacks 
+#In the image below, it’s evident that there are an association between the columns
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribanaemia=residuals^2/X-squared
+#100*anaemiachisq$residuals^2/anaemiachisq$statistic in percentage 
+#X-squared = anaemiachisq$statistic
+contribanaemia<- 100*anaemiachisq$residuals^2/anaemiachisq$statistic
+round(contribanaemia, 3)
+corrplot(contribanaemia, is.cor = FALSE)
+
+```
+
+```{r}
+library(lolcat)
+HeartData$creatinine_phosphokinase
+summary(HeartData$creatinine_phosphokinase)
+HeartData$creatinine_phosphokinase
+outlier_creatinine_phosphokinase<- boxplot.stats(HeartData$creatinine_phosphokinase)$out
+outlier_creatinine_phosphokinase
+
+##Normality test 
+#shapiro.test(HeartData$creatinine_phosphokinase)
+skewness.test(HeartData$creatinine_phosphokinase)
+kurtosis.test(HeartData$creatinine_phosphokinase)
+#Transformation 
+HeartData$creatinine_phosphokinase<-log(HeartData$creatinine_phosphokinase+10)
+#HeartData$creatinine_phosphokinase<-1/(HeartData$creatinine_phosphokinase+1)
+
+outlier_creatinine_phosphokinase<-boxplot.stats(HeartData$creatinine_phosphokinase)$out 
+outlier_creatinine_phosphokinase
+
+is.na( HeartData$creatinine_phosphokinase)<-HeartData$creatinine_phosphokinase
+HeartData$creatinine_phosphokinase
+mean(is.na(HeartData$creatinine_phosphokinase))
+HeartData<-na.omit(HeartData) 
+ 
+ summary(HeartData$creatinine_phosphokinase)
+ 
+ density_plotcreatinine_phosphokinase<-ggplot(HeartData, aes(x = creatinine_phosphokinase)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "creatinine_phosphokinase",
+                     breaks = seq(3.0,10.0,0.1),
+                     limits=c(3.0,10.0)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of creatinine_phosphokinase") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotcreatinine_phosphokinase
+
+shaded_areacreatinine_phosphokinase<- ggplot_build(density_plotcreatinine_phosphokinase)$data[[1]] %>% 
+  filter(x < mean(HeartData$creatinine_phosphokinase))
+
+density_plot_creatinine_phosphokinase_shaded<-density_plotcreatinine_phosphokinase + 
+geom_area(data = shaded_areacreatinine_phosphokinase, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_creatinine_phosphokinase_shaded
+
+
+summary(HeartData$creatinine_phosphokinase)
+#mean and median are close  
+median_line_creatinine_phosphokinase <- 
+  ggplot_build(density_plotcreatinine_phosphokinase)$data[[1]] %>% 
+  filter(x <= median(HeartData$creatinine_phosphokinase))
+median_line_creatinine_phosphokinase
+
+density_plot_creatinine_phosphokinase_shaded + 
+  geom_area(data = median_line_creatinine_phosphokinase, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, creatinine_phosphokinase), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=creatinine_phosphokinase, ymax=creatinine_phosphokinase,y=creatinine_phosphokinase), width = 0.5)+
+  ggtitle("Density plot of creatinine_phosphokinase")
+ 
+```
+
+```{r}
+HeartData$diabetes<-as.factor(HeartData$diabetes)
+str(HeartData$diabetes)
+HeartData$diabetes
+diabetesdata<-HeartData %>%
+  dplyr::count(diabetes) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+diabetesdata
+
+ggplot(diabetesdata, 
+       aes(x = reorder(diabetes, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "diabetes", 
+       y = "Percentage", 
+       title  = "Plot of diabetes")
+
+library("ggpubr")
+ggboxplot(HeartData, x = "DEATH_EVENT", y = "diabetes", 
+          color = "DEATH_EVENT", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Diabetes", xlab = "DEALTH due to heart attack")
+
+ggplot(HeartData, 
+       aes(x = diabetes, 
+           fill = DEATH_EVENT)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+# the chi square test, a non-parametric statistic to determine if there is a correlation between diabeties and dealths due to heart attack
+# Create a data frame from the main data set.
+Diabetes_data<- data.frame(HeartData$diabetes,HeartData$DEATH_EVENT)
+
+# Create a table with the needed variables.
+Diabetes_data = table(HeartData$diabetes,HeartData$DEATH_EVENT) 
+print(Diabetes_data)
+Diabeteschisq<-chisq.test(Diabetes_data)
+# Perform the Chi-Square test.
+print(Diabeteschisq)
+
+Diabeteschisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = 2.1617e-30, df = 1, p-value = 1, If we assume predetermined level of significance to be 0.05 then we fail to reject the null hypothesis, the null hypothesis of a chi square goodness of fit test is that there is a relationship between the categorical varables which we will see from the corelation plot. 
+
+
+Diabeteschisq$observed
+Diabeteschisq$expected
+round(Diabeteschisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(Diabeteschisq$observed−Diabeteschisq$expected)/√Diabeteschisq$observed , this is the literary explanation  we now do it in R program.
+round(Diabeteschisq$residuals, 3)
+library(corrplot)
+corrplot(Diabeteschisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of Diabetes and column variables ofDealth due to heart attacks 
+#In the image below, it’s evident that there are an association between the columns
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribdiabetes=residuals^2/X-squared
+#100*Diabeteschisq$residuals^2/Diabeteschisq$statistic in percentage 
+#X-squared = Diabeteschisq$statistic
+contribDiabete<- 100*Diabeteschisq$residuals^2/Diabeteschisq$statistic
+round(contribDiabete, 3)
+```
+
+```{r}
+HeartData$ejection_fraction
+summary(HeartData$ejection_fraction)
+
+HeartData$ejection_fraction
+outlier_ejection_fraction<- boxplot.stats(HeartData$ejection_fraction)$out
+outlier_ejection_fraction
+is.na( HeartData$ejection_fraction)<-HeartData$ejection_fraction>69
+HeartData$ejection_fraction
+mean(is.na(HeartData$ejection_fraction))
+HeartData<-na.omit(HeartData) 
+##Normality test 
+shapiro.test(HeartData$ejection_fraction)
+#Transformation 
+HeartData$ejection_fraction<-log(HeartData$ejection_fraction+10)
+#HeartData$ejection_fraction<-1/(HeartData$ejection_fraction+1)
+
+outlier_ejection_fraction<-boxplot.stats(HeartData$ejection_fraction)$out 
+outlier_ejection_fraction
+ 
+ summary(HeartData$ejection_fraction)
+ 
+ density_plotejection_fraction<-ggplot(HeartData, aes(x = ejection_fraction)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "ejection_fraction",
+                     breaks = seq(2.70,4.80, 0.01),
+                     limits=c(2.70,4.80)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of ejection_fraction") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotejection_fraction
+
+shaded_areaejection_fraction<- ggplot_build(density_plotejection_fraction)$data[[1]] %>% 
+  filter(x < mean(HeartData$ejection_fraction))
+
+density_plot_ejection_fraction_shaded<-density_plotejection_fraction + 
+geom_area(data = shaded_areaejection_fraction, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_ejection_fraction_shaded
+
+
+summary(HeartData$ejection_fraction)
+#mean and median are close  
+median_line_ejection_fraction <- 
+  ggplot_build(density_plotejection_fraction)$data[[1]] %>% 
+  filter(x <= median(HeartData$ejection_fraction))
+median_line_ejection_fraction
+
+density_plot_ejection_fraction_shaded + 
+  geom_area(data = median_line_ejection_fraction, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, ejection_fraction), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=ejection_fraction, ymax=ejection_fraction,y=ejection_fraction), width = 0.5)+
+  ggtitle("Density plot of ejection_fraction")
+```
+
+```{r}
+HeartData$high_blood_pressure
+summary(HeartData$high_blood_pressure)
+HeartData$high_blood_pressure<as.factor(HeartData$high_blood_pressure)
+str(HeartData$high_blood_pressure)
+high_blood_pressuredata<-HeartData %>%
+  dplyr::count(high_blood_pressure) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+high_blood_pressuredata
+
+ggplot(high_blood_pressuredata, 
+       aes(x = reorder(high_blood_pressure, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "high_blood_pressure", 
+       y = "Percentage", 
+       title  = "Plot of high_blood_pressure")
+
+
+ggboxplot(HeartData, x = "DEATH_EVENT", y = "high_blood_pressure", 
+          color = "DEATH_EVENT", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "high_blood_pressure", xlab = "DEALTH due to heart attack")
+
+ggplot(HeartData, 
+       aes(x = high_blood_pressure, 
+           fill = DEATH_EVENT)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+# the chi square test, a non-parametric statistic to determine if there is a correlation between diabeties and dealths due to heart attack
+# Create a data frame from the main data set.
+high_blood_pressure_data<- data.frame(HeartData$high_blood_pressure,HeartData$DEATH_EVENT)
+
+# Create a table with the needed variables.
+high_blood_pressure_data = table(HeartData$high_blood_pressure,HeartData$DEATH_EVENT) 
+print(high_blood_pressure_data)
+high_blood_pressurechisq<-chisq.test(high_blood_pressure_data)
+# Perform the Chi-Square test.
+print(high_blood_pressurechisq)
+
+high_blood_pressurechisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = 1.5435, df = 1, p-value = 0.2141, If we assume predetermined level of significance to be 0.05 then we fail to reject the null hypothesis, the null hypothesis of a chi square goodness of fit test is that there is a relationship between the categorical varables which we will see from the corelation plot. 
+
+
+high_blood_pressurechisq$observed
+high_blood_pressurechisq$expected
+round(high_blood_pressurechisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(high_blood_pressurechisq$observed−high_blood_pressurechisq$expected)/√high_blood_pressurechisq$observed , this is the literary explanation  we now do it in R program.
+round(high_blood_pressurechisq$residuals, 3)
+library(corrplot)
+corrplot(high_blood_pressurechisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of high_blood_pressure and column variables ofDealth due to heart attacks 
+#In the image below, it’s evident that there are an association between the columns
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribhigh_blood_pressure=residuals^2/X-squared
+#100*high_blood_pressurechisq$residuals^2/high_blood_pressurechisq$statistic in percentage 
+#X-squared = high_blood_pressurechisq$statistic
+contribhigh_blood_pressure<- 100*high_blood_pressurechisq$residuals^2/high_blood_pressurechisq$statistic
+round(contribhigh_blood_pressure, 3)
+corrplot(contribhigh_blood_pressure, is.cor = FALSE)
+
+```
+
+```{r}
+HeartData$platelets
+summary(HeartData$platelets)
+
+
+boxplot.stats(HeartData$platelets)$out 
+
+#is.na( HeartData$platelets)<-HeartData$platelets
+HeartData$platelets
+ 
+#Normality test 
+shapiro.test(HeartData$platelets)
+
+#require(devtools)
+#install_github("burrm/lolcat")
+#require(lolcat)
+library(lolcat)
+set.seed(1)
+skewness.test(HeartData$platelets)
+kurtosis.test(HeartData$platelets)
+
+#Transformation 
+HeartData$platelets<-log(HeartData$platelets+1)
+#HeartData$platelets<-1/(HeartData$platelets+1)
+HeartData$platelets
+  boxplot.stats(HeartData$platelets)$out 
+
+ 
+ summary(HeartData$platelets)
+
+ density_plotplatelets<-ggplot(HeartData, aes(x = platelets)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "platelets",
+                     breaks = seq(10,15, 0.01),
+                     limits=c(10,14)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of platelets") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotplatelets
+
+shaded_areaplatelets<- ggplot_build(density_plotplatelets)$data[[1]] %>% 
+  filter(x < mean(HeartData$platelets))
+
+density_plot_platelets_shaded<-density_plotplatelets + 
+geom_area(data = shaded_areaplatelets, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_platelets_shaded
+
+
+summary(HeartData$platelets)
+#mean and median are close  
+median_line_platelets <- 
+  ggplot_build(density_plotplatelets)$data[[1]] %>% 
+  filter(x <= median(HeartData$platelets))
+median_line_platelets
+
+density_plot_platelets_shaded + 
+  geom_area(data = median_line_platelets, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, platelets), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=platelets, ymax=platelets,y=platelets), width = 0.5)+
+  ggtitle("Density plot of platelets")
+  
+```
+
+```{r}
+HeartData$serum_creatinine
+summary(HeartData$serum_creatinine)
+
+outlier_serum_creatinine<-boxplot.stats(HeartData$serum_creatinine,coef = 5)$out 
+outlier_serum_creatinine
+#is.na( HeartData$serum_creatinine)<-HeartData$serum_creatinine
+HeartData$serum_creatinine
+ 
+##Normality test 
+#shapiro.test(HeartData$serum_creatinine)
+
+#require(devtools)
+#install_github("burrm/lolcat")
+#require(lolcat)
+library(lolcat)
+set.seed(1)
+skewness.test(HeartData$serum_creatinine)
+kurtosis.test(HeartData$serum_creatinine)
+
+#Transformation 
+HeartData$serum_creatinine<-log(HeartData$serum_creatinine+1)
+#HeartData$serum_creatinine<-1/(HeartData$serum_creatinine+1)
+
+  boxplot.stats(HeartData$serum_creatinine)$out 
+
+ mean(is.na(HeartData$serum_creatinine))>1.6
+HeartData<-na.omit(HeartData)
+ summary(HeartData$serum_creatinine)
+
+ density_plotserum_creatinine<-ggplot(HeartData, aes(x = serum_creatinine)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "serum_creatinine",
+                     breaks = seq(0.0,2.50, 0.01),
+                     limits=c(0.0,2.50)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of serum_creatinine") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotserum_creatinine
+
+shaded_areaserum_creatinine<- ggplot_build(density_plotserum_creatinine)$data[[1]] %>% 
+  filter(x < mean(HeartData$serum_creatinine))
+
+density_plot_serum_creatinine_shaded<-density_plotserum_creatinine + 
+geom_area(data = shaded_areaserum_creatinine, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_serum_creatinine_shaded
+
+
+summary(HeartData$serum_creatinine)
+#mean and median are close  
+median_line_serum_creatinine <- 
+  ggplot_build(density_plotserum_creatinine)$data[[1]] %>% 
+  filter(x <= median(HeartData$serum_creatinine))
+median_line_serum_creatinine
+
+density_plot_serum_creatinine_shaded + 
+  geom_area(data = median_line_serum_creatinine, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, serum_creatinine), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=serum_creatinine, ymax=serum_creatinine,y=serum_creatinine), width = 0.5)+
+  ggtitle("Density plot of serum_creatinine")
+```
+
+```{r}
+HeartData$serum_sodium
+summary(HeartData$serum_sodium)
+  HeartData$serum_sodium
+summary(HeartData$serum_sodium)
+
+outlier_serum_sodium<-boxplot.stats(HeartData$serum_sodium)$out 
+outlier_serum_sodium
+#is.na( HeartData$serum_sodium)<-HeartData$serum_sodium
+HeartData$serum_sodium
+  boxplot.stats(HeartData$serum_sodium)$out 
+
+ mean(is.na(HeartData$serum_sodium))>124
+HeartData<-na.omit(HeartData)
+ summary(HeartData$serum_sodium)
+
+##Normality test 
+shapiro.test(HeartData$serum_sodium)
+
+#require(devtools)
+#install_github("burrm/lolcat")
+#require(lolcat)
+library(lolcat)
+set.seed(1)
+skewness.test(HeartData$serum_sodium)
+kurtosis.test(HeartData$serum_sodium)
+
+#Transformation 
+HeartData$serum_sodium<-log(HeartData$serum_sodium+1)
+#HeartData$serum_sodium<-1/(HeartData$serum_sodium+1)
+
+ 
+ density_plotserum_sodium<-ggplot(HeartData, aes(x = serum_sodium)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "serum_sodium",
+                     breaks = seq(4.8,5.1,0.01),
+                     limits=c(4.8,5.1)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of serum_sodium") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plotserum_sodium
+
+shaded_areaserum_sodium<- ggplot_build(density_plotserum_sodium)$data[[1]] %>% 
+  filter(x < mean(HeartData$serum_sodium))
+
+density_plot_serum_sodium_shaded<-density_plotserum_sodium + 
+geom_area(data = shaded_areaserum_sodium, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_serum_sodium_shaded
+
+
+summary(HeartData$serum_sodium)
+#mean and median are close  
+median_line_serum_sodium <- 
+  ggplot_build(density_plotserum_sodium)$data[[1]] %>% 
+  filter(x <= median(HeartData$serum_sodium))
+median_line_serum_sodium
+
+density_plot_serum_sodium_shaded + 
+  geom_area(data = median_line_serum_sodium, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, serum_sodium), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=serum_sodium, ymax=serum_sodium,y=serum_sodium), width = 0.5)+
+  ggtitle("Density plot of serum_sodium")
+```
+
+```{r}
+HeartData$sex
+summary(HeartData$sex)
+HeartData$sex<-as.factor(HeartData$sex)
+sexdata<-HeartData %>%
+  dplyr::count(sex) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+sexdata
+
+ggplot(sexdata, 
+       aes(x = reorder(sex, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "sex", 
+       y = "Percentage", 
+       title  = "Plot of sex")
+
+
+ggboxplot(HeartData, x = "DEATH_EVENT", y = "sex", 
+          color = "DEATH_EVENT", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "sex", xlab = "DEALTH due to heart attack")
+
+ggplot(HeartData, 
+       aes(x = sex, 
+           fill = DEATH_EVENT)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+# the chi square test, a non-parametric statistic to determine if there is a correlation between diabeties and dealths due to heart attack
+# Create a data frame from the main data set.
+sex_data<- data.frame(HeartData$sex,HeartData$DEATH_EVENT)
+
+# Create a table with the needed variables.
+sex_data = table(HeartData$sex,HeartData$DEATH_EVENT) 
+print(sex_data)
+sexchisq<-chisq.test(sex_data)
+# Perform the Chi-Square test.
+print(sexchisq)
+
+sexchisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = 0, df = 1, p-value = 1, If we assume predetermined level of significance to be 0.05 then we fail to reject the null hypothesis, the null hypothesis of a chi square goodness of fit test is that there is a relationship between the categorical varables which we will see from the corelation plot. 
+
+
+sexchisq$observed
+sexchisq$expected
+round(sexchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(sexchisq$observed−sexchisq$expected)/√sexchisq$observed , this is the literary explanation  we now do it in R program.
+round(sexchisq$residuals, 3)
+library(corrplot)
+corrplot(sexchisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of sex and column variables ofDealth due to heart attacks 
+#In the image below, it’s evident that there are an association between the columns
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribsex=residuals^2/X-squared
+#100*sexchisq$residuals^2/sexchisq$statistic in percentage 
+#X-squared = sexchisq$statistic
+contribsex<- 100*sexchisq$residuals^2/sexchisq$statistic
+round(contribsex,3)
+#corrplot(contribsex,is.cor = FALSE) will give error
+```
+
+```{r}
+HeartData$smoking
+HeartData$smoking<-as.factor(HeartData$smoking)
+summary(HeartData$smoking)
+
+smokingdata<-HeartData %>%
+  dplyr::count(smoking) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+smokingdata
+
+ggplot(smokingdata, 
+       aes(x = reorder(smoking, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "smoking", 
+       y = "Percentage", 
+       title  = "Plot of smoking")
+
+
+ggboxplot(HeartData, x = "DEATH_EVENT", y = "smoking", 
+          color = "DEATH_EVENT", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "smoking", xlab = "DEALTH due to heart attack")
+
+ggplot(HeartData, 
+       aes(x = smoking, 
+           fill = DEATH_EVENT)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+# the chi square test, a non-parametric statistic to determine if there is a correlation between diabeties and dealths due to heart attack
+# Create a data frame from the main data set.
+smoking_data<- data.frame(HeartData$smoking,HeartData$DEATH_EVENT)
+
+# Create a table with the needed variables.
+smoking_data = table(HeartData$smoking,HeartData$DEATH_EVENT) 
+print(smoking_data)
+smokingchisq<-chisq.test(smoking_data)
+# Perform the Chi-Square test.
+print(smokingchisq)
+
+smokingchisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = X-squared = 1.0422, df = 1, p-value = 0.3073, If we assume predetermined level of significance to be 0.05 then we fail to reject the null hypothesis, the null hypothesis of a chi square goodness of fit test is that there is a relationship between the categorical varables which we will see from the corelation plot. 
+
+
+smokingchisq$observed
+smokingchisq$expected
+round(smokingchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(smokingchisq$observed−smokingchisq$expected)/√smokingchisq$observed , this is the literary explanation  we now do it in R program.
+round(smokingchisq$residuals, 3)
+library(corrplot)
+corrplot(smokingchisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of smoking and column variables ofDealth due to heart attacks 
+#In the image below, it’s evident that there are an association between the columns
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribsmoking=residuals^2/X-squared
+#100*smokingchisq$residuals^2/smokingchisq$statistic in percentage 
+#X-squared = smokingchisq$statistic
+contribsmoking<- 100*smokingchisq$residuals^2/smokingchisq$statistic
+round(contribsmoking, 3)
+corrplot(contribsmoking, is.cor = FALSE)
+```
+
+```{r}
+HeartData$time
+summary(HeartData$time)
+
+outlier_time<-boxplot.stats(HeartData$time)$out 
+outlier_time
+#is.na( HeartData$time)<-HeartData$time
+HeartData$time
+ 
+##Normality test 
+#shapiro.test(HeartData$time)
+
+#require(devtools)
+#install_github("burrm/lolcat")
+#require(lolcat)
+library(lolcat)
+set.seed(1)
+
+shapiro.test(HeartData$time)
+skewness.test(HeartData$time)
+kurtosis.test(HeartData$time)
+
+#Transformation 
+HeartData$time<-log(HeartData$time+1)
+#HeartData$time<-1/(HeartData$time+1)
+
+  boxplot.stats(HeartData$time)$out 
+is.na(HeartData$time)<2.8
+ mean(is.na(HeartData$time))
+
+HeartData<-na.omit(HeartData)
+ summary(HeartData$time)
+
+ density_plottime<-ggplot(HeartData, aes(x = time)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "time",
+                     breaks = seq(0.30,2.50, 0.01),
+                     limits=c(0.30,2.50)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of time") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+ density_plottime
+
+shaded_areatime<- ggplot_build(density_plottime)$data[[1]] %>% 
+  filter(x < mean(HeartData$time))
+
+density_plot_time_shaded<-density_plottime + 
+geom_area(data = shaded_areatime, aes(x = x, y = y), fill="pink", alpha = 0.5)
+ density_plot_time_shaded
+
+
+summary(HeartData$time)
+#mean and median are close  
+median_line_time <- 
+  ggplot_build(density_plottime)$data[[1]] %>% 
+  filter(x <= median(HeartData$time))
+median_line_time
+
+density_plot_time_shaded + 
+  geom_area(data = median_line_time, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DEATH_EVENT, time), data = HeartData, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=HeartData,aes(x=DEATH_EVENT,ymin=time, ymax=time,y=time), width = 0.5)+
+  ggtitle("Density plot of time")
+
+ str(HeartData)
+```
+
+
+```{r}
+HeartData
+HeartData
+#Balance the target column for data analysis and statistical modelling, that column is HeartData$DEATH_EVENT which is the target feature 
+library(MASS)
+library(DMwR)
+
+HeartData
+HeartData$DEATH_EVENT<- factor(HeartData$DEATH_EVENT, levels=c('0','1'))
+
+ 
+HeartData<-SMOTE(DEATH_EVENT~ .,HeartData, perc.over =80,perc.under=225.5)
+
+#we compare with the unbalanced data and see the dealth and survived are  171, 172 respectively 
+table(HeartData$DEATH_EVENT)
+#heat map correlation visualization
+```
+
+
+```{r}
+library(corrplot)
+library(ggcorrplot)
+str(HeartData)
+  HeartData[]<- lapply(HeartData, function(x) {
+  if(!is.numeric(x)|is.integer(x)) as.numeric(as.character(x)) else x
+ })
+sapply(HeartData, class)
+
+table(HeartData$DEATH_EVENT)
+correlations=cor(HeartData,HeartData$DEATH_EVENT)
+correlations 
+plot(correlations)
+
+corrplot(correlations, number.cex =1, method = "circle", type = "full", tl.cex=.8,tl.col = "black")
+HeartDatamatrix<-as.matrix(HeartData)
+Corelationmatrix<-rcorr(HeartDatamatrix, type = c("pearson","spearman"))
+Corelationmatrix
+# Extract the correlation coefficients
+Corelationmatrix$r
+correlation_values<-as.data.frame(Corelationmatrix$r)
+correlation_values$DEATH_EVENT<-as.matrix(correlation_values$DEATH_EVENT)
+correlation_values$DEATH_EVENT
+# Extract p-values
+Corelationmatrix$P 
+P_value<-as.data.frame(Corelationmatrix$P )
+P_value$DEATH_EVENT<-as.matrix(P_value$DEATH_EVENT)
+P_value$DEATH_EVENT
+
+Correlation_Pvalue<-cbind(correlation_values$DEATH_EVENT,P_value$DEATH_EVENT)  
+Correlation_Pvalue
+##plot(Correlation_Pvalue)
+```
+
+
+```{r}
+#Heat map correlation 
+HeartData
+library(plotly)
+library(heatmaply)
+library(ggcorrplot)
+heatmaply_cor(
+  cor(HeartData),
+  xlab = "HeartData features", 
+  ylab = "HeartData features",
+  k_col = 2, 
+  k_row = 2
+)
+
+heatmaply_cor(
+  correlation_values,
+  node_type = "scatter",
+  point_size_mat = -log10(P_value), 
+  point_size_name = "-log10(Corelationmatrix$P)",
+  label_names = c("x", "y", "Correlation")
+)
+#Feature selection
+# ensure results are repeatable
+set.seed(7)
+# load the library
+
+```
+```{r}
+library(mlbench)
+library(caret)
+# load the dataset
+HeartData
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+#train the model
+model<-train(DEATH_EVENT~.,data=HeartData, trControl=control)
+# estimate variable importance
+importance <- varImp(model, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+```
+
+
+```{r}
+
+
+
+#unsupervised machine learning approach
+# Installing Packages 
+#install.packages("ClusterR") 
+#install.packages("cluster") 
+  
+# Loading package 
+#install.packages("ClusterR")
+library(ClusterR) 
+library(cluster) 
+  str(HeartData)
+# Removing initial label of from original dataset 
+HeartData_R <-HeartData[, -13] 
+  
+# Fitting K-Means clustering Model  
+# to training dataset 
+set.seed(240) # Setting seed 
+kmeans.re <- kmeans(HeartData_R, centers = 2, nstart = 20) 
+kmeans.re 
+  
+# Cluster identification for  
+# each observation 
+kmeans.re$cluster 
+  
+# Confusion Matrix 
+cm <- table(HeartData$DEATH_EVENT, kmeans.re$cluster) 
+cm 
+  
+# Model Evaluation and visualization 
+plot(HeartData_R[c("age","anaemia","creatinine_phosphokinase","diabetes","ejection_fraction","high_blood_pressure","platelets","serum_creatinine","serum_sodium","sex","smoking","time")],  
+     col = kmeans.re$cluster,pch = 8, cex =0.5,
+     main = "K-means with 2 clusters") 
+## Visualizing clusters 
+n_kmeans <- kmeans.re$cluster 
+clusplot(HeartData_R[, c("age","anaemia","creatinine_phosphokinase","diabetes","ejection_fraction","high_blood_pressure","platelets","serum_creatinine","serum_sodium","sex","smoking","time")], 
+         n_kmeans, 
+         lines = 1, 
+         shade = TRUE, 
+         color = TRUE, 
+         labels = 2, 
+         plotchar = TRUE, 
+         span = TRUE, 
+         main = paste("Cluster HeartData"), 
+         xlab = 'cluster pointsx', 
+         ylab = 'clusterpointy')
+n_kmeans
+table(test$DEATH_EVENT)
+table(predict_Dealth,test$DEATH_EVENT)
+lvs <- c("1", "0")
+truth1 <- factor(rep(lvs, times = c(36, 37)),
+                levels = rev(lvs))
+predict_Dealth <- factor(
+               c(
+                 rep(lvs, times = c(32, 6)),
+                 rep(lvs, times = c(4, 31))),               
+               levels = rev(lvs))
+xtab <- table(predict_Dealth, truth1)
+caret::confusionMatrix(xtab)
+result<- confusionMatrix(predict_Dealth, truth1)
+result
+precision<- result$byClass['Pos Pred Value']
+precision
+recall<- result$byClass['Sensitivity']
+recall
+```
+
+```{r}
+#logistic regression 
+library(caTools) 
+library(ROCR) 
+library(caret)
+library(MLmetrics)
+library(glmnet)
+#install.packages("mlogit")
+library(mlogit)
+   str(HeartData)
+   set.seed(1)
+HeartData$DEATH_EVENT<-as.factor(HeartData$DEATH_EVENT)   
+# Splitting dataset 
+split <- sample.split(HeartData, SplitRatio = 0.8) 
+split 
+   
+train<- subset(HeartData, split == "TRUE") 
+test<- subset(HeartData, split == "FALSE") 
+#Training model 
+Hmodel <- glm(DEATH_EVENT~.,data=train,family = binomial(logit), maxit = 100) 
+Hmodel
+# Summary 
+summary(Hmodel) 
+   
+# Predict test data based on model 
+predict_Dealth <-predict(Hmodel,test, type = "response") 
+predict_Dealth 
+   
+# Changing probabilities 
+predict_Dealth<- ifelse(predict_Dealth>0.5, 1, 0) 
+   
+# Evaluating model accuracy 
+# using confusion matrix 
+table(test$DEATH_EVENT,predict_Dealth) 
+   
+classerr <- mean(predict_Dealth != test$Dealth) 
+#print(paste('Accuracy =', 1 -classerr)) 
+ mean(predict_Dealth==test$DEATH_EVENT)
+table(predict_Dealth==test$DEATH_EVENT)  
+# ROC-AUC Curve 
+    test[,13]
+ROCPred<-ROCR::prediction(predict_Dealth, test[,13])  
+ROCPer <-ROCR::performance(ROCPred,"tpr", x.measure = "fpr") 
+   
+auc <- performance(ROCPred, measure = "auc") 
+auc <- auc@y.values[[1]] 
+auc 
+
+# Plotting curve 
+plot(ROCPer) 
+plot(ROCPer, colorize = TRUE,  
+     print.cutoffs.at = seq(0.1, by = 0.1),  
+     main = "ROC CURVE") 
+abline(a = 0, b = 1) 
+   
+auc <- round(auc, 4) 
+legend(.6, .4, auc, title = "AUC", cex =0.3)
+
+   #confusion matrix and accuracy
+table(test$DEATH_EVENT)
+ table(predict_Dealth,test$DEATH_EVENT)
+lvs <- c("Dealth_Hattack", "alive")
+truth1 <- factor(rep(lvs, times = c(37, 37)),
+                levels = rev(lvs))
+predict_Dealth <- factor(
+               c(
+                 rep(lvs, times = c(28, 9)),
+                 rep(lvs, times = c(9, 28))),               
+               levels = rev(lvs))
+xtab <- table(predict_Dealth, truth1)
+caret::confusionMatrix(xtab)
+result<- confusionMatrix(predict_Dealth, truth1)
+result
+precision<- result$byClass['Pos Pred Value']
+precision
+recall<- result$byClass['Sensitivity']
+recall
+```
+
+
+```{r}
+#optimize our regression model 
+#we use a step 
+#Training model 
+opt_model <- glm(DEATH_EVENT~.,data=train,family = binomial(logit), maxit = 100) 
+opt_model
+# Summary 
+summary(opt_model) 
+   opt_model %>% stepAIC(trace = FALSE)
+coef(opt_model)
+summary(opt_model)$coef
+# Predict test data based on model 
+
+
+
+
+predict_Dealth1 <-predict(opt_model,test, type = "response") 
+predict_Dealth1 
+   probabilities <- opt_model %>% predict(test, type = "response")
+# Changing probabilities 
+predict_Dealth1<-ifelse(probabilities > 0.5, 1, 0)
+# Evaluating model accuracy 
+# using confusion matrix 
+table(test$DEATH_EVENT,predict_Dealth1) 
+   
+classerr <- mean(predict_Dealth != test$Dealth) 
+#print(paste('Accuracy =', 1 -classerr)) 
+ mean(predict_Dealth1==test$DEATH_EVENT)
+table(predict_Dealth1==test$DEATH_EVENT)  
+# ROC-AUC Curve 
+ROCPred<-ROCR::prediction(predict_Dealth1, test[,13])  
+ROCPer <-ROCR::performance(ROCPred,"tpr", x.measure = "fpr") 
+   
+auc <- performance(ROCPred, measure = "auc") 
+auc <- auc@y.values[[1]] 
+auc 
+
+# Plotting curve 
+plot(ROCPer) 
+plot(ROCPer, colorize = TRUE,  
+     print.cutoffs.at = seq(0.1, by = 0.1),  
+     main = "ROC CURVE") 
+abline(a = 0, b = 1) 
+   
+auc <- round(auc, 4) 
+legend(.6, .4, auc, title = "AUC", cex =0.3)
+
+   #confusion matrix and accuracy
+table(test$DEATH_EVENT)
+table(test$DEATH_EVENT,predict_Dealth1)
+lvs <- c("Dealth_Hattack", "alive")
+truth<- factor(rep(lvs, times = c(37, 38)),
+                levels = rev(lvs))
+predict_Dealth1<- factor(
+               c(
+                 rep(lvs, times = c(6, 30)),
+                 rep(lvs, times = c(32, 6))),               
+               levels = rev(lvs))
+xtab <- table(predict_Dealth1, truth)
+caret::confusionMatrix(xtab)
+result<- confusionMatrix(predict_Dealth1, truth)
+result
+precision<- result$byClass['Pos Pred Value']
+precision
+recall<- result$byClass['Sensitivity']
+recall
+```
+
+
+```{r}
+#KNN
+install.packages("e1071") 
+install.packages("caTools") 
+install.packages("class") 
+  
+# Loading package 
+library(e1071) 
+library(caTools) 
+library(class) 
+  
+# Loading data 
+HeartData
+ 
+# Splitting data into train 
+# and test data 
+split <- sample.split(HeartData, SplitRatio = 0.8) 
+train<- subset(HeartData, split == "TRUE") 
+test<- subset(HeartData, split == "FALSE") 
+  
+# Feature Scaling 
+train_scale <-scale(train[, 1:12]) 
+test_scale <-scale(test[, 1:12]) 
+  
+# Fitting KNN Model  
+# to training dataset 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 1) 
+classifier_knn 
+  
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn != test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError)) 
+  
+# K = 3 
+classifier_knn3<- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 3) 
+classifier_knn3 
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn3 != test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError))
+
+# K = 5 
+classifier_knn5<- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 5) 
+classifier_knn5 
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn5 != test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError)) 
+  
+# K = 7 
+classifier_knn7<- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 7) 
+classifier_knn7
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn7 != test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError))
+  
+# K = 15 
+classifier_knn5<- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 5) 
+classifier_knn5 
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn5 != test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError)) 
+  
+# K = 19 
+classifier_knn19<- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train$DEATH_EVENT, 
+                      k = 19) 
+classifier_knn19
+# Model Evaluation - Choosing K 
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn19!= test$DEATH_EVENT) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# Confusiin Matrix when k = 1 as the highest accuracy 
+#cm <- table(test$DEATH_EVENT, classifier_knn) 
+#cm 
+table(test$DEATH_EVENT)
+   conm<-table(classifier_knn,test$DEATH_EVENT)
+   conm
+   
+lvs <- c("Dealth_Hattack", "alive")
+truth<- factor(rep(lvs, times = c(37, 37)),
+                levels = rev(lvs))
+predict_Dealth1<- factor(
+               c(
+                 rep(lvs, times = c(6, 30)),
+                 rep(lvs, times = c(32, 6))),               
+               levels = rev(lvs))
+xtab <- table(predict_Dealth1, truth)
+caret::confusionMatrix(xtab)
+result<- confusionMatrix(predict_Dealth1, truth)
+result
+precision<- result$byClass['Pos Pred Value']
+precision
+recall<- result$byClass['Sensitivity']
+recall
+   
+lvs <- c("0", "1")
+truth<- factor(rep(lvs,times = c(66, 66)),
+                levels = rev(lvs))
+classifier_knn<- factor(
+               c(
+                 rep(lvs, times = c(64, 3)),
+                 rep(lvs, times = c(2, 63))),               
+               levels = rev(lvs))
+xtab <- table(classifier_knn, truth)
+caret::confusionMatrix(xtab)
+result<- confusionMatrix(classifier_knn, truth)
+result
+precision<- result$byClass['Pos Pred Value']
+precision
+recall<- result$byClass['Sensitivity']
+recall
+```
+
+```{r}
+#SVM
+HeartData$DEATH_EVENT = factor(HeartData$DEATH_EVENT, levels = c(0, 1))
+HeartData$DEATH_EVENT
+# Splitting the dataset into the Training set and Test set 
+#install.packages('caTools') 
+library(caTools) 
+  
+set.seed(123) 
+split = sample.split(HeartData$DEATH_EVENT, SplitRatio = 0.80) 
+  
+training_HeartData = subset(HeartData, split == TRUE) 
+test_HeartData = subset(HeartData, split == FALSE) 
+
+training_HeartData
+# Feature Scaling 
+training_HeartData[-13] = scale(training_HeartData[-13]) 
+test_HeartData[-13] = scale(test_HeartData[-13])
+
+training_HeartData[-13]
+#install.packages('e1071') 
+library(e1071) 
+  
+classifier = svm(formula = DEATH_EVENT ~ ., 
+                 data = training_HeartData, 
+                 type = 'C-classification', 
+                 kernel = 'linear') 
+library(caret)
+y_pred = predict(classifier, newdata = test_HeartData[-13])
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+grid <- expand.grid(C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2,5))
+svm_Linear_Grid <- train(DEATH_EVENT ~., data = training_HeartData, method = "svmLinear",
+trControl=trctrl,
+preProcess = c("center", "scale"),
+tuneGrid = grid,
+tuneLength = 10)
+svm_Linear_Grid
+plot(svm_Linear_Grid)
+cm = table(test_HeartData[,13], y_pred) 
+cm
+
+
+# installing library ElemStatLearn
+#install.packages("ElemStatLearn")## note you have to download this package from https://cran.r-project.org/src/contrib/Archive/ElemStatLearn/
+# it is the ElemStatLearn_2015.6.26.2.tar version 
+library(ElemStatLearn) 
+  
+# Plotting the training data set results 
+set = test_HeartData 
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01) 
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01) 
+ 
+grid_set=expand.grid(X1, X2) 
+
+plot(set[, -13], main = 'plot of test Support vector machine', 
+xlim = range(X1), ylim = range(X2)) 
+```
+
+```{r}
+#ANN
+HeartData
+str(HeartData)
+# Convert features to numeric 
+
+  HeartData[]<- lapply(HeartData, function(x) {
+  if(!is.numeric(x)|is.integer(x)) as.numeric(as.character(x)) else x
+ })
+sapply(HeartData, class)
+
+str(HeartData)
+# custom normalization function
+normalize <- function(x) { 
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+str(HeartData$DEATH_EVENT)
+# apply normalization to entire data frame (you may also try to used un-normalised data to see how the results look like)
+HeartData_norm<-as.data.frame(lapply(HeartData, normalize))
+HeartData_norm
+# confirm that the range is now between zero and one
+summary(HeartData_norm$DEATH_EVENT)
+
+# compared to the original minimum and maximum
+summary(HeartData)
+dim(HeartData)
+HeartData<- sample(1:nrow(HeartData))
+# create training and test data (you may wish to use k-fold cross validation to get a validated result)
+HeartData_train <- HeartData_norm[1:288, ]
+HeartData_test <- HeartData_norm[289:576, ]
+HeartData_test$DEATH_EVENT
+table(HeartData_test$DEATH_EVENT)
+## Step 3: Training a model on the data ----
+# train the neuralnet model
+library(neuralnet)
+# simple ANN with only a single hidden neuron
+set.seed(12345) # to guarantee repeatable results
+DEATH_EVENT_model<- neuralnet(DEATH_EVENT ~ .,data=HeartData_train)
+# plot the network
+plot(DEATH_EVENT_model)
+HeartData
+#  Evaluating model performance
+model_results<- neuralnet::compute(DEATH_EVENT_model,HeartData_test[1:12])
+predicted_strength <- model_results$net.result
+correlation_<-cor(predicted_strength, HeartData_test$DEATH_EVENT,use="complete.obs")
+correlation_
+results<- data.frame(actual = HeartData_test$DEATH_EVENT, prediction=predicted_strength)
+roundedresults<-sapply(results,round,digits=0)
+results
+roundedresults<-sapply(results,round,digits=0)
+roundedresults
+roundedresultsdf=data.frame(roundedresults)
+attach(roundedresultsdf)
+table(actual,prediction)
+
+lvs <- c("0", "1")
+actual<- factor(rep(lvs, times = c(, 87)),
+                levels = rev(lvs))
+prediction<- factor(
+               c(
+                 rep(lvs, times = c(309,   14)),
+                 rep(lvs, times = c(8, 79))),               
+               levels = rev(lvs))
+xtab <- table(prediction, actual)
+#install.packages("caret")
+library(caret)
+
+caret::confusionMatrix(xtab)
+
+output<- confusionMatrix(prediction7, actual7)
+output
+precision <-output1$byClass['Pos Pred Value']
+precision 
+recall <- output1$byClass['Sensitivity']
+recall
+```
+
+
+
+
+

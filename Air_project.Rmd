@@ -1,0 +1,167 @@
+---
+title: "Pollution project"
+author: "Amalawa O Ogbomo"
+date: "27/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(data.table)
+library(ggpubr)
+library(Hmisc)
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+library(tidyr)
+
+pollution_Data<- read.csv("C:/Users/aoogb/Desktop/Copy of AirQualityUCI.csv", stringsAsFactors = TRUE)
+pollution_Data
+describe(pollution_Data)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+pollution_Data[pollution_Data < 0] <- NA
+```
+
+
+```{r}
+is.dirty<- function(n){ 
+  if (is.numeric(n)) !is.finite(n) else is.na(n)}
+sapply(pollution_Data, is.dirty)
+```
+
+```{r}
+na_count <-sapply(pollution_Data, function(y) sum(length(which(is.na(y)))))
+na_count <-data.frame(na_count)
+na_count
+sum(is.na(pollution_Data))
+```
+
+
+```{r}
+#count of number of Na in the whole dataframe column by column and sum all together. 
+mean.isna<-sapply(pollution_Data, function(a) mean(is.na(a)))
+mean.isna<-data.frame(mean.isna)
+mean.isna
+```
+
+
+
+```{r}
+# check for the mean of the na values in each column
+
+    ## if the significance level is set at 0.05 then we call either reject or fail to reject the null hypothesis 
+pollution_Data<-dplyr::select(pollution_Data,-c(X,X.1))
+pollution_Data
+```
+
+
+
+```{r}
+mean.isna<-sapply(pollution_Data, function(a) mean(is.na(a)))
+mean.isna<-data.frame(mean.isna)
+mean.isna
+
+pollution_Data1<-dplyr::select(pollution_Data,-c(1,2))
+pollution_Data1
+#pollution_Data$NMHC.GT
+#summary(pollution_Data)
+
+```
+
+
+```{r}
+library(rlang)
+for (cols in colnames(pollution_Data1)) {
+  if (cols %in% names(pollution_Data1[,sapply(pollution_Data1, is.numeric)])) {
+   pollution_Data1<-pollution_Data1%>%mutate(!!cols := replace(!!rlang::sym(cols), is.na(!!rlang::sym(cols)), mean(!!rlang::sym(cols), na.rm=TRUE)))
+     
+  }
+  else {
+     
+    pollution_Data1<-pollution_Data1%>%mutate(!!cols := replace(!!rlang::sym(cols), !!rlang::sym(cols)=="", mean(!!rlang::sym(cols))))
+     
+  }
+}
+ 
+pollution_Data1
+sum(is.na(pollution_Data1))
+
+   Airdata<-cbind(pollution_Data[1:2],pollution_Data1)
+   Airdata
+   sum(is.na(Airdata))
+```
+
+```{r}
+```
+
+```{r}
+#rowMeans(dframe, na.rm=TRUE) 
+   #data <- data %>%
+         #   filter(column > 0)
+#rowMeans(data, na.rm = TRUE)
+#resultNeg2 <- result2 %>%# we get the df that is negative
+#filter(pollution_Data < 0)
+#df <- df[df > 0]
+## TImeseries 
+
+library(lubridate) 
+   
+# output to be created as png file 
+png(file ="multivariateTimeSeries.png") 
+   
+# creating multivariate time series object  
+# from date 22 January, 2020 
+mts <- ts(cbind(positiveCases, deaths), 
+start = decimal_date(ymd("2020-01-22")),  
+                     frequency = 365.25 / 7) 
+   
+# plotting the graph 
+plot(mts, xlab ="Weekly Data",  
+     main ="COVID-19 Cases", 
+     col.main ="darkgreen") 
+   
+# saving the file  
+dev.off() 
+```
+
+
+```{r}
+library(lubridate) 
+   
+# library required for forecasting 
+library(forecast) 
+   
+# output to be created as png file 
+png(file ="forecastTimeSeries.png") 
+   
+# creating time series object 
+# from date 22 January, 2020 
+mts <- ts(x, start = decimal_date(ymd("2020-01-22")), 
+                            frequency = 365.25 / 7) 
+   
+# forecasting model using arima model 
+fit <- auto.arima(mts) 
+   
+# Next 5 forecasted values 
+forecast(fit, 5) 
+   
+# plotting the graph with next  
+# 5 weekly forecasted values 
+plot(forecast(fit, 5), xlab ="Weekly Data", 
+ylab ="Total Positive Cases", 
+main ="COVID-19 Pandemic", col.main ="darkgreen") 
+   
+# saving the file  
+dev.off() 
+```
+
+

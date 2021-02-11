@@ -1,0 +1,3914 @@
+
+---
+title: "Data Validation and Visualisation. 2019-20 COM736(72210)"
+author: "Amalawa O Ogbomo  B00804422"
+date: "26/07/2020"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+```{r}
+knitr::opts_chunk$set(echo = FALSE)
+#install.packages("readr")
+library(readr)
+#install.packages("rio")
+library(rio)
+#install.packages("openxlsx")
+library(openxlsx)
+library(data.table)
+library(Hmisc)
+library(ggrepel)
+library(grDevices)
+library(ggbiplot)
+library(MASS)
+library(tibble)
+library(ISwR)
+library(ggpubr)
+#We first create a folder called AllData on our desktop and we save our different excel data to be merged in this folder 
+#To merge data we write a function called multmerge
+multmerge = function(AllData){
+  filenames=list.files(path=AllData, full.names=TRUE)
+  datalist = lapply(filenames, function(x){read.csv(file=x,header=T,stringsAsFactors =FALSE)})
+  Reduce(function(x,y) {merge(x,y)}, datalist)
+}
+AIBL = multmerge("C:/Users/aoogb/Desktop/AllData")
+AIBL=data.frame(AIBL)
+AIBL
+#This functions inner joins the data at RID, SITEID , and VISCODE with same values and we can have a new data of 862 rows and 44 columns 
+```
+```{r}
+is.finite.data.frame <- function(obj){
+  sapply(obj,FUN = function(p) all(is.finite(x)))
+}
+sapply(AIBL, is.finite)
+AIBL<-as.data.frame(AIBL)
+```
+```{r}
+#AIBL$PTDOB gives us a false and display "/" which we deal with now.
+AIBL$PTDOB<-gsub("/"," ",AIBL$PTDOB )
+AIBL$PTDOB
+AIBL
+is.special <- function(n){ 
+  if (is.numeric(n)) !is.finite(n) else is.na(n)}
+is.special
+sapply(AIBL, is.special)
+summary(AIBL)
+str(AIBL)
+#we check the code by writing a direct is.na code 
+is.na(AIBL)
+a<-is.na(AIBL)
+sum(a)
+#we cannot find any missing value as sum of all missing values gives zero 
+```
+
+```{r}
+#following that DXCURREN = 1 means Healthy Control (HC) DXCURREN = 2 or 3 means Non-HC (2 - MCI, 3 - AD) Other values in DXCURREN can be considered missing or other types of dementia
+#Target class output AIBL$DXCURREN is also called Current Diagnosis, however AIBL$DXCURREN is considered as a binary class as 1 or 0, the value 1 is Healthy Control and 0 Non Healthy control
+# Any value less than 1 or greater than 3 is set as NA  and the value 2 and 3 to the value 0 
+AIBL$DXCURREN
+is.na(AIBL$DXCURREN) <- AIBL$DXCURREN <1 | AIBL$DXCURREN >3
+AIBL$DXCURREN
+mean(is.na(AIBL$DXCURREN))# mean is 0.004640371 , less than 0.05 so we omit it because it will have little or no effect on shewing our data as missing value is insignificant 
+AIBL<- na.omit(AIBL)
+
+
+# we then set any value greater than 1 to 0 , this in the code below will give us a Binary output 
+is.na(AIBL$DXCURREN)<-AIBL$DXCURREN >1 
+AIBL$DXCURREN
+AIBL[is.na(AIBL)] = 0
+AIBL$DXCURREN #now we have a Diagnosis of the value 1 for healthy and value 0 for non healthy
+AIBL$DXCURREN<-as.factor(AIBL$DXCURREN)
+```
+
+```{r}
+library(dplyr)
+library(tidyselect)
+library(tidyverse)
+#From the dictionary we know that the RID SITEID and VISCODE are identification numbers and as such we remove them from our data. 
+AIBL<-dplyr::select(AIBL,-SITEID,-VISCODE,-RID)
+AIBL
+```
+
+```{r}
+#install.packages("cdata")
+library(cdata)
+#install.packages("wrapr")
+library(wrapr)
+#install.packages("stringr")
+library(stringr)
+#install.packages("lubridate")
+library(lubridate)
+AIBL$EXAMDATE
+
+AIBL$EXAMDATE<- gsub("/",";",AIBL$EXAMDATE )
+AIBL$EXAMDATE
+#AIBL$EXAMDATE<-as.numeric(AIBL$EXAMDATE)
+is.na(AIBL$EXAMDATE) <- AIBL$EXAMDATE<0
+AIBL$EXAMDATE
+mean(is.na(AIBL$EXAMDATE))
+#mean is 0.001160093, less than 0.05
+AIBL<- na.omit(AIBL)
+lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")
+Sys.setlocale("LC_TIME", lct)
+
+AIBL$EXAMDATE<- gsub(";","/",AIBL$EXAMDATE )
+AIBL$EXAMDATE
+
+AIBL$EXAMDATE<-strptime(AIBL$EXAMDATE,format="%m/%d/%Y") # we defined  what is the original format of your date
+AIBL$EXAMDATE
+AIBL$EXAMDATE<-as.Date(AIBL$EXAMDATE,format="%d-%m-%Y") #defined what is the desired format of your date
+AIBL$EXAMDATE
+
+
+AIBL<-AIBL%>% dplyr::mutate(Examdateyear = lubridate::year(AIBL$EXAMDATE), 
+                            Examdatemonth = lubridate::month(AIBL$EXAMDATE), 
+                            Examdateday = lubridate::day(AIBL$EXAMDATE))
+AIBL
+AIBL$Examdateyear<-as.numeric(AIBL$Examdateyear)
+AIBL$Examdateday<-as.numeric(AIBL$Examdateday)
+AIBL$Examdatemonth<-as.numeric(AIBL$Examdatemonth)
+
+AIBL
+```
+```{r}
+AIBL$APTESTDT<- gsub("/",";",AIBL$APTESTDT )
+AIBL$APTESTDT
+is.na(AIBL$APTESTDT) <- AIBL$APTESTDT<0
+AIBL$APTESTDT
+mean(is.na(AIBL$APTESTDT))
+#mean is 0.001160093, less than 0.05
+AIBL<- na.omit(AIBL)
+lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")
+Sys.setlocale("LC_TIME", lct)
+
+AIBL$APTESTDT<- gsub(";","/",AIBL$APTESTDT )
+AIBL$APTESTDT
+
+AIBL$APTESTDT<-strptime(AIBL$APTESTDT,format="%m/%d/%Y") # we defined  what is the original format of your date
+AIBL$APTESTDT
+AIBL$APTESTDT<-as.Date(AIBL$APTESTDT,format="%d-%m-%Y") #defined what is the desired format of your date
+AIBL$APTESTDT
+
+AIBL<-AIBL%>% dplyr::mutate(APTESTDTyear = lubridate::year(AIBL$APTESTDT), 
+                            APTESTDTmonth = lubridate::month(AIBL$APTESTDT), 
+                            APTESTDTday = lubridate::day(AIBL$APTESTDT))
+AIBL
+AIBL$APTESTDTyear<-as.numeric(AIBL$APTESTDTyear)
+AIBL$APTESTDTday<-as.numeric(AIBL$APTESTDTday)
+AIBL$APTESTDTmonth<-as.numeric(AIBL$APTESTDTmonth)
+AIBL<-dplyr::select(AIBL, -EXAMDATE,-APTESTDT)
+AIBL
+```
+```{r}
+#Examination dates for year , month and day visualization
+#install.packages("Hmisc")
+#install.packages("R.utils")
+#library(R.utils)
+#install.packages("imputeMissings")
+library("imputeMissings")
+library(mice)
+AIBL
+AIBL$Examdateyear
+str(AIBL$Examdateyear)
+summary(AIBL$Examdateyear)
+ggplot(AIBL, aes(x = Examdateyear)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(2000,3013 ,100),
+                     limits=c(2000,3013)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("year of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+outlier_values <- boxplot.stats(AIBL$Examdateyear)$out# outlier values.
+outlier_values
+boxplot(AIBL$Examdateyear, main="Year of Examination", boxwex=0.1)
+
+#3013 is the main outliers of concern
+is.na(AIBL$Examdateyear)<-AIBL$Examdateyear>3010
+
+complete.cases(AIBL$Examdateyear)
+mean(is.na(AIBL$Examdateyear))
+AIBL$Examdateyear
+AIBL$Examdateyear<- Hmisc::impute(AIBL$Examdateyear, fun= median)
+
+
+ggplot(data=AIBL, aes(x = Examdateyear, y = DXCURREN)) +
+  geom_point(color = "darkorchid4") +
+  labs(title = "Diagnosis and Examination date",
+       y = "Diagnosis",
+       x = "Examdateyear") + theme_bw(base_size = 15)
+
+ggplot(AIBL, aes(x = Examdateyear)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(2004,2016,1),
+                     limits=c(2004,2016)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("year of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+ggboxplot(AIBL, x = "DXCURREN", y = "Examdateyear", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Examination year", xlab = "Diagnosis")+
+  ggtitle("Diagnosis year of Examination")
+
+ggplot(AIBL, 
+       aes(x = Examdateyear, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(2004,2016,1),
+                     limits=c(2004,2016)) +
+  ggtitle("year of Examination")
+
+
+```
+
+
+
+```{r}
+AIBL$Examdatemonth
+str(AIBL$Examdatemonth)
+summary(AIBL$Examdatemonth)
+ggplot(AIBL, aes(x = Examdatemonth)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(-3,16  ,1),
+                     limits=c(-3,16)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("month of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x=Examdatemonth)) + 
+  geom_line(aes(y=DXCURREN)) + 
+  labs(title="Time Series Chart for Examiniation month", 
+       subtitle="month of Examination and Diagnosis", 
+       caption="AIBLData", 
+       y="Diagnosis")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "Examdatemonth", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Examination month", xlab = "Diagnosis")+
+  ggtitle("Diagnosis month of Examination")
+
+ggplot(AIBL, 
+       aes(x = Examdatemonth, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination months",
+                     breaks = seq(0,12,1),
+                     limits=c(0,12)) +
+  ggtitle("months of Examination")
+```
+
+
+
+```{r}
+AIBL$Examdateday
+str(AIBL$Examdateday)
+summary(AIBL$Examdateday)
+ggplot(AIBL, aes(x = Examdateday)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination day",
+                     breaks = seq(-4,37  ,2),
+                     limits=c(-4,37)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("day of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+ggplot(AIBL, aes(x=Examdateday)) + 
+  geom_line(aes(y=DXCURREN)) + 
+  labs(title="Time Series Chart for Examiniation day", 
+       subtitle="month of Examination and Diagnosis", 
+       caption="AIBLData", 
+       y="Diagnosis")
+
+ggboxplot(AIBL, x = "DXCURREN", y = "Examdateday", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Examination day", xlab = "Diagnosis")+
+  ggtitle("Diagnosis day of Examination")
+
+ggplot(AIBL, 
+       aes(x = Examdateday, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination months",
+                     breaks = seq(0,31,1),
+                     limits=c(0,31)) +
+  ggtitle("days of Examination")
+
+```
+
+```{r}
+AIBL$APTESTDTyear
+str(AIBL$APTESTDTyear)
+summary(AIBL$APTESTDTyear)
+ggplot(AIBL, aes(x = APTESTDTyear)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(2000,3013 ,100),
+                     limits=c(2000,3013)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("year of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+outlier_values <- boxplot.stats(AIBL$APTESTDTyear)$out# outlier values.
+outlier_values
+boxplot(AIBL$APTESTDTyear, main="Year of Examination", boxwex=0.1)
+outlier_values <- boxplot.stats(AIBL$APTESTDTyear,coef=4)$out# outlier values.
+outlier_values
+#3013 is the main outliers of concern
+is.na(AIBL$APTESTDTyear)<-AIBL$APTESTDTyear>3010
+
+complete.cases(AIBL$APTESTDTyear)
+mean(is.na(AIBL$APTESTDTyear))
+AIBL$APTESTDTyear
+AIBL$APTESTDTyear<-Hmisc::impute(AIBL$APTESTDTyear, fun = median)
+
+#we apply transformation to this column 
+#AIBL$APTESTDTyear=AIBL$APTESTDTyear^(-0.1)
+AIBL$APTESTDTyear<-as.numeric(AIBL$APTESTDTyear)
+
+summary(AIBL$APTESTDTyear)
+
+
+
+ggplot(data=AIBL, aes(x = APTESTDTyear, y = DXCURREN)) +
+  geom_point(color = "darkorchid4") +
+  labs(title = "Diagnosis and Examination date",
+       y = "Diagnosis",
+       x = "APTESTDTyear") + theme_bw(base_size = 15)
+
+ggplot(AIBL, aes(x = APTESTDTyear)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(2000,2016,1),
+                     limits=c(2000,2016)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("year of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "APTESTDTyear", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Examination year", xlab = "Diagnosis")+
+  ggtitle("Diagnosis year of Examination")
+
+ggplot(AIBL, 
+       aes(x = APTESTDTyear, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "APTESTDT year",
+                     breaks = seq(2004,2016,1),
+                     limits=c(2004,2016)) +
+  ggtitle("year of APTESTDT")
+```
+
+
+```{r}
+AIBL$APTESTDTmonth
+str(AIBL$APTESTDTmonth)
+summary(AIBL$APTESTDTmonth)
+ggplot(AIBL, aes(x = APTESTDTmonth)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(-3,16  ,1),
+                     limits=c(-3,16)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("month of Examination") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x=APTESTDTmonth)) + 
+  geom_line(aes(y=DXCURREN)) + 
+  labs(title="Time Series Chart for APTESTDT month", 
+       subtitle="month of APTESTDT and Diagnosis", 
+       caption="AIBLData", 
+       y="Diagnosis")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "APTESTDTmonth", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Examination month", xlab = "Diagnosis")+
+  ggtitle("Diagnosis month of Examination")
+
+ggplot(AIBL, 
+       aes(x = APTESTDTmonth, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination months",
+                     breaks = seq(0,12,1),
+                     limits=c(0,12)) +
+  ggtitle("months of APTESTDT")
+```
+
+
+
+```{r}
+
+AIBL$APTESTDTday
+str(AIBL$APTESTDTday)
+summary(AIBL$APTESTDTday)
+ggplot(AIBL, aes(x = APTESTDTday)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Examination day",
+                     breaks = seq(-4,37  ,2),
+                     limits=c(-4,37)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("day of APTESTDT") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+ggplot(AIBL, aes(x=APTESTDTday)) + 
+  geom_line(aes(y=DXCURREN)) + 
+  labs(title="Time Series Chart for Examiniation day", 
+       subtitle="month of Examination and Diagnosis", 
+       caption="AIBLData", 
+       y="Diagnosis")
+
+ggboxplot(AIBL, x = "DXCURREN", y = "APTESTDTday", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "APTESTDT day", xlab = "Diagnosis")+
+  ggtitle("Diagnosis day of APTESTDT")
+
+ggplot(AIBL, 
+       aes(x = APTESTDTday, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination months",
+                     breaks = seq(0,31,1),
+                     limits=c(0,31)) +
+  ggtitle("days of APTESTDT")
+
+```
+
+```{r}
+#DXCURREN Diagnostic Summary  Current Diagnosis, Healthy control= value of 1 , non Healthy Control = value of 0
+library(ggplot2)
+library(scales)
+AIBL$DXCURREN 
+#boxplot(AIBL$DXCURREN, col = "blue")
+#abline(h = 12)s
+ggplot(AIBL, 
+       aes(x = DXCURREN, 
+           y = ..count.. / sum(..count..))) + 
+  geom_bar() +
+  geom_bar(fill = "#0073C2FF") +
+  labs(x = "DXCURREN", 
+       y = "Percentage", 
+       title  = "Plot of Healthy and Non Healthy Control For Diagnosis") +
+  scale_y_continuous(labels = scales::percent)
+```
+
+
+```{r}
+plotdata<-AIBL %>%
+  count(DXCURREN) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+plotdata
+```
+
+```{r}
+ggplot(plotdata, 
+       aes(x = reorder(DXCURREN, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXCURREN", 
+       y = "Percentage", 
+       title  = "Plot of Healthy and Non Healthy Control For Diagnosis")
+#We can clealy see from the Barchart that the non healthy is 28 percent and healthy is 72 percent 
+```
+
+
+```{r}
+AIBL<-AIBL %>%dplyr::select(DXCURREN, everything())
+AIBL
+```
+
+```{r}
+# one digit
+#ApoE Genotyping - Results between 2 to 4 inclusive 
+
+AIBL$APGEN1
+is.na(AIBL$APGEN1) <-AIBL$APGEN1 <2 | AIBL$APGEN1 >4
+AIBL$APGEN1
+complete.cases(AIBL$APGEN1)
+mean(is.na(AIBL$APGEN1))# the mean of the NA is 0.02436054 which is less than 0.05 so we can impute the median 
+AIBL$APGEN1<-Hmisc::impute(AIBL$APGEN1, fun = median)
+
+
+#The apolipoprotein E (APOE) genotype is a genetic risk factor for dementia, Alzheimer's disease, and cardiovascular disease (CVD). It includes three alleles (e2, e3, e4) that are #located on chromosome 19q3
+#This will be treated as a categorical variable from the information we now know 
+AIBL$APGEN1<-as.factor(AIBL$APGEN1)
+```
+
+```{r}
+APGEN1data<-AIBL %>%
+  count(APGEN1) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+APGEN1data
+```
+
+```{r}
+ggplot(APGEN1data, 
+       aes(x = reorder(APGEN1, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "APGEN1", 
+       y = "Percentage", 
+       title  = "Plot of apolipoprotein E (APGEN1) genotype")
+
+library("ggpubr")
+ggboxplot(AIBL, x = "DXCURREN", y = "APGEN1", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Clinical Dementia Rating", xlab = "Diagnosis")
+```
+```{r}
+AIBL
+ggplot(AIBL, 
+       aes(x = APGEN1, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+```
+```{r}
+#we use the chi square test to determine if there is a correlation between AIBL$DXCURREN and AIBL$APGEN1
+#The Chi-square test is a non-parametric statistic, also called a distribution free test
+# Create a data frame from the main data set.
+APGEN1DXdata<- data.frame(AIBL$APGEN1,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+APGEN1DXdata = table(AIBL$APGEN1,AIBL$DXCURREN) 
+print(APGEN1DXdata)
+APGEN1chisq<-chisq.test(APGEN1DXdata)
+# Perform the Chi-Square test.
+print(APGEN1chisq)
+```
+```{r}
+APGEN1chisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = 47.623, df = 2, p-value <.05 , this means the Null hypothesis (H0) is rejected and the Alternative hypothesis is accepted , which means that AIBL$DXCURREN and AIBL$APGEN1 are statistically significantly associated , we will now explore this relationship in detail. 
+```
+
+```{r}
+APGEN1chisq$observed
+APGEN1chisq$expected
+round(APGEN1chisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(APGEN1chisq$residuals, 3)
+library(corrplot)
+corrplot(APGEN1chisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row of APGEN1 variable "3" and column variables of Healthy diagnosis(DXCURREN) variable "1"  of  2.129, the same positive correlation is found between column variable 0 of non healthy diagnosis and row variable 4 of APGEN1 of 4.679
+#Negative residuals are in red. This implies a repulsion (negative association) between the corresponding row of APGEN1 variable "3" and column variables of Non Healthy diagnosis(DXCURREN) "0"  of -3.431, the same negative correlation is is found between column variable 1 of Healthy diagnosis and row variable 4 of APGEN1 of  -2.904
+#There is weak or no correlation in the row variable 2 of APGEN1  with columns of Healthy diagnosis(DXCURREN) "1" and Non Healthy diagnosis(DXCURREN) "0" with -0.746 and 0.463 respectively.
+#In the image below, it’s evident that there are an association between the columns
+```
+
+
+```{r}
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribAPGEN1=residuals^2/X-squared
+#100*APGEN1chisq$residuals^2=residuals^2 in percentage 
+#X-squared = APGEN1chisq$statistic
+contribAPGEN1<- 100*APGEN1chisq$residuals^2/APGEN1chisq$statistic
+round(contribAPGEN1, 3)
+corrplot(contribAPGEN1, is.cor = FALSE)
+```
+
+
+```{r}
+AIBL
+#APGEN2 Genotype - Allele 2 Results, Genotype - Allele 2  2..4, one digit
+#ApoE Genotyping - Results between 2 to 4 inclusive 
+AIBL$APGEN2
+is.na(AIBL$APGEN2) <-AIBL$APGEN2 <2 | AIBL$APGEN2 >4
+AIBL$APGEN2
+complete.cases(AIBL$APGEN2)
+mean(is.na(AIBL$APGEN2))# the mean of the NA is 0.02436054 which is less than 0.05 so we can Hmisc::impute the median 
+AIBL$APGEN2<-Hmisc::impute(AIBL$APGEN2, fun = median)
+AIBL$APGEN2<-as.factor(AIBL$APGEN2)
+
+#The apolipoprotein E (APOE) genotype is a genetic risk factor for dementia, Alzheimer's disease, and cardiovascular disease (CVD). It includes three alleles (e2, e3, e4) that are #located on chromosome 19q3
+#This will be treated as a categorical variable from the information we now know 
+#AIBL$APGEN2<-as.factor(AIBL$APGEN2)
+```
+
+```{r}
+APGEN2data<-AIBL %>%
+  count(APGEN2) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+APGEN2data
+```
+
+```{r}
+ggplot(APGEN2data, 
+       aes(x = reorder(APGEN2, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "APGEN2", 
+       y = "Percentage", 
+       title  = "Plot of apolipoprotein E (APGEN2) genotype")
+
+
+```
+
+```{r}
+AIBL
+ggplot(AIBL, 
+       aes(x = APGEN2, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+```
+
+```{r}
+#we use the chi square test to determine if there is a correlation between AIBL$DXCURREN and AIBL$APGEN1
+#The Chi-square test is a non-parametric statistic, also called a distribution free test
+# Create a data frame from the main data set.
+APGEN2DXdata<- data.frame(AIBL$APGEN2,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+APGEN2DXdata = table(AIBL$APGEN2,AIBL$DXCURREN) 
+print(APGEN2DXdata)
+
+# Perform the Chi-Square test.
+APGEN2chisq<-chisq.test(APGEN2DXdata)
+print(APGEN2chisq)
+```
+
+```{r}
+APGEN2chisq$p.value
+#Null hypothesis (H0): the row and the column variables of the contingency table are independent.
+#Alternative hypothesis (H1): row and column variables are dependent
+#Null hypothesis: There are no relationships between the categorical variables. If you know the value of one variable, it does not help you predict the value of another variable.
+#Alternative hypothesis: There are relationships between the categorical variables. Knowing the value of one variable does help you predict the value of another variable.
+#X-squared = 25.94, df = 2, p-value = 2.33e-06 , this means the Null hypothesis (H0) is rejected and the Alternative hypothesis is accepted , which means that AIBL$DXCURREN and AIBL$APGEN2 are  statistically significantly associated , we will now explore this relationship in detail.
+```
+
+
+```{r}
+APGEN2chisq$observed
+APGEN2chisq$expected
+round(APGEN2chisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN2chisq$observed−APGEN2chisq$expected)/√APGEN2chisq$expected , this is the literary explanation  we now do it in R program.
+round(APGEN2chisq$residuals, 3)
+library(corrplot)
+corrplot(APGEN2chisq$residuals, is.cor = FALSE)
+#Positive residuals are in blue. Positive values in cells specify an attraction (positive association) between the corresponding row and column variables of Healthy diagnosis(DXCURREN) with "1" and APGEN2 with "2"  with a value of  1.214 , a strong positive association of  3.854 for column 0 and row 4 also 
+#Negative residuals are in red. This implies a repulsion (negative association) between the corresponding row and column variables of Non Healthy diagnosis(DXCURREN) with "0" and APGEN2 with "2" of -1.955, row 4 and column 1 gives us -2.392.
+#There is weak or no correlation in the APGEN2 of variable 3 with columns of Healthy diagnosis(DXCURREN) "1" and Non Healthy diagnosis(DXCURREN) "0" with -0.230 and 0.143 respectively.
+#In the image below, it’s evident that there are an association between the columns
+```
+
+
+```{r}
+#The contribution (in %) of a given cell to the total Chi-square score is calculated as follow:
+#contribAPGEN2=residuals^2/X-squared
+#100*APGEN1chisq$residuals^2=residuals^2 in percentage 
+#X-squared = APGEN2chisq$statistic
+contribAPGEN2<- 100*APGEN2chisq$residuals^2/APGEN2chisq$statistic
+round(contribAPGEN2, 3)
+corrplot(contribAPGEN2, is.cor = FALSE)
+#Non healthy control of value "0" is strongly associated with APGEN2 of a value "2" with 14.741% 
+#Healthy control of value "1" is frequently associated with APGEN2 of a value "2" with 5.677%
+#Non healthy control of value "0" is most strongly associated with APGEN2 of a value "4" with 57.257% 
+#Healthy control of value "1" is strongly associated with APGEN2 of a value "4" with 22.052%
+#However there is very weak correlation between APGEN2 with value "3" and both (healthy value "1" and non healthy "0") of 0.204% and   0.078%
+
+```
+
+
+```{r}
+#APRECEIVE  Sample recieved within 24 hours of blood draw? yes or NO , 1 or, 0 one digit
+AIBL
+AIBL$APRECEIVE
+is.na(AIBL$APRECEIVE)<- AIBL$APRECEIVE !=1
+AIBL$APRECEIVE
+complete.cases(AIBL$APRECEIVE)
+mean(is.na(AIBL$APRECEIVE))
+AIBL$APRECEIVE<-as.factor(AIBL$APRECEIVE)
+APRECEIVEdata<-AIBL %>%
+  count(APRECEIVE) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+APRECEIVEdata
+
+ggplot(APRECEIVEdata, 
+       aes(x = reorder(APRECEIVE, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "APRECEIVE", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = APRECEIVE, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+APRECEIVEDXdata<- data.frame(AIBL$APRECEIVE,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+APRECEIVEDXdata = table(AIBL$APRECEIVE,AIBL$DXCURREN) 
+print(APRECEIVEDXdata)
+
+# Perform the Chi-Square test.
+APRECEIVEchisq<-chisq.test(APRECEIVEDXdata)
+print(APRECEIVEchisq)
+
+APRECEIVEchisq$p.value
+
+APRECEIVEchisq$observed
+APRECEIVEchisq$expected
+round(APRECEIVEchisq$expected,2)
+
+round(APRECEIVEchisq$residuals, 3)
+
+contribAPRECEIVE<- 100*APRECEIVEchisq$residuals^2/APRECEIVEchisq$statistic
+round(contribAPRECEIVE, 2)
+
+AIBL
+
+```
+
+```{r}
+#APAMBTEMP  Sample shipped at ambient temperature?  yes or NO , 1 or 0 , one digit
+AIBL$APAMBTEMP
+is.na(AIBL$APAMBTEMP)<- AIBL$APAMBTEMP !=1
+AIBL$APAMBTEMP
+complete.cases(AIBL$APAMBTEMP)
+mean(is.na(AIBL$APAMBTEMP))
+AIBL$APAMBTEMP<-as.factor(AIBL$APAMBTEMP)
+APAMBTEMPdata<-AIBL %>%
+  count(APAMBTEMP) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+APAMBTEMPdata
+
+
+ggplot(APAMBTEMPdata, 
+       aes(x = reorder(APAMBTEMP, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "APAMBTEMP", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = APAMBTEMP, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+APAMBTEMPDXdata<- data.frame(AIBL$APAMBTEMP,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+APAMBTEMPDXdata = table(AIBL$APAMBTEMP,AIBL$DXCURREN) 
+print(APAMBTEMPDXdata)
+
+# Perform the Chi-Square test.
+APAMBTEMPchisq<-chisq.test(APAMBTEMPDXdata)
+print(APAMBTEMPchisq)
+
+APAMBTEMPchisq$p.value
+
+APAMBTEMPchisq$observed
+APAMBTEMPchisq$expected
+round(APAMBTEMPchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(APAMBTEMPchisq$residuals, 3)
+
+AIBL
+#AIBL$APAMBTEMP column is droped because there is no standard deviation and so there is no correlation to the DXCURREN column.
+```
+
+```{r}
+#CDGLOBAL   Clinical Dementia Rating "like a scale" 0.5 interval of 0.0=0.0;0.5=0.5;1.0=1.0;2.0=2.0;3.0=3.0,   1 or 2 digit
+AIBL$CDGLOBAL
+is.na(AIBL$CDGLOBAL)<-AIBL$CDGLOBAL!=0.0 & AIBL$CDGLOBAL!=0.5 & AIBL$CDGLOBAL!=1.0 & AIBL$CDGLOBAL!=2.0 & AIBL$CDGLOBAL!=3.0
+AIBL$CDGLOBAL
+complete.cases(AIBL$CDGLOBAL)
+mean(is.na(AIBL$CDGLOBAL))
+AIBL<-na.omit(AIBL)
+AIBL$CDGLOBAL
+AIBL$CDGLOBAL<-as.factor(AIBL$CDGLOBAL)
+library("ggpubr")
+ggboxplot(AIBL, x = "DXCURREN", y = "CDGLOBAL", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Clinical Dementia Rating", xlab = "Diagnosis")
+
+ggplot(AIBL, 
+       aes(x = CDGLOBAL, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+CDGLOBALdata<-AIBL %>%
+  count(CDGLOBAL) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+CDGLOBALdata
+
+ggplot(CDGLOBALdata, 
+       aes(x = reorder(CDGLOBAL, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "CDGLOBAL", 
+       y = "Percentage", 
+       title  = "Plot of Clinical Dementia Rating (CDGLOBAL)")
+
+CDGLOBALDXdata = table(AIBL$CDGLOBAL,AIBL$DXCURREN) 
+print(CDGLOBALDXdata)
+
+# Perform the Chi-Square test.
+CDGLOBALchisq<-chisq.test(CDGLOBALDXdata)
+print(CDGLOBALchisq)
+
+CDGLOBALchisq$p.value
+
+CDGLOBALchisq$observed
+CDGLOBALchisq$expected
+round(CDGLOBALchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(CDGLOBALchisq$observed−CDGLOBALchisq$expected)/√CDGLOBALchisq$expected , this is the literary explanation  we now do it in R program.
+round(CDGLOBALchisq$residuals, 3)
+```
+
+```{r}
+#AXT117     AXT117; Thyroid Stim. Hormone  8 digits 
+#Thyroid Stimulating Hormone cannot be less than 0 or 0
+AIBL$AXT117
+is.na(AIBL$AXT117)<-AIBL$AXT117<=0
+AIBL$AXT117
+complete.cases(AIBL$AXT117)
+mean(is.na(AIBL$AXT117))
+AIBL$AXT117
+AIBL$AXT117<-Hmisc::impute(AIBL$AXT117, fun = median)
+AIBL$AXT117<-as.numeric(AIBL$AXT117)
+summary(AIBL$AXT117)
+ggqqplot(AIBL$AXT117, ylab = "Thyroid Stimulating Hormone")
+
+summary(AIBL$AXT117)
+density_plotAXT117<-ggplot(AIBL, aes(x = AXT117)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Thyroid Stimulating Hormone",
+                     breaks = seq(-1.0, 12.7, 1),
+                     limits=c(-1.0, 12.7)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Thyroid Stimulating. Hormone") +
+  #geom_area(stat ="bin", fill="pink",alpha=0.5)+
+  theme(axis.line = element_line(size=1, colour = "black"))
+density_plotAXT117
+shaded_area<- 
+  ggplot_build(density_plotAXT117)$data[[1]] %>% 
+  filter(x < mean(AIBL$AXT117))
+
+density_plot_AXT117_shaded<-density_plotAXT117 + 
+  geom_area(data = shaded_area, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_AXT117_shaded
+
+summary(AIBL$AXT117)
+median_line_AXT117 <- 
+  ggplot_build(density_plotAXT117)$data[[1]] %>% 
+  filter(x <= median(AIBL$AXT117))
+median_line_AXT117 
+
+density_plot_AXT117_shaded + 
+  geom_area(data = median_line_AXT117, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, AXT117), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=AXT117, ymax=AXT117,y=AXT117), width = 0.5)+
+  ggtitle("Density plot of Thyroid Stimulating Hormone")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "AXT117", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Thyroid Stimulating Hormone", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$AXT117)$out# outlier values.
+outlier_values
+boxplot(AIBL$AXT117, main="Thyroid Stimulating  Hormone", boxwex=0.1)
+outlier_values <- boxplot.stats(AIBL$AXT117,coef=4)$out# outlier values.
+outlier_values
+#7.26  9.70 12.66 are the  main outliers of concern
+is.na(AIBL$AXT117)<-AIBL$AXT117>7
+
+complete.cases(AIBL$AXT117)
+mean(is.na(AIBL$AXT117))
+AIBL$AXT117
+AIBL$AXT117<-Hmisc::impute(AIBL$AXT117, fun = median)
+
+ggplot(AIBL, aes(x = AXT117)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Thyroid Stimulating Hormone",
+                     breaks = seq(-1.0, 7.1, 1),
+                     limits=c(-1.0, 7.1)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Thyroid Stimulating. Hormone") +
+  #geom_area(stat ="bin", fill="pink",alpha=0.5)+
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, AXT117), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=AXT117, ymax=AXT117,y=AXT117), width = 0.5)+
+  ggtitle("Density plot of Thyroid Stimulating Hormone")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "AXT117", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Thyroid Stimulating Hormone", xlab = "Diagnosis")
+#Test for normality
+before_AXT117_transformation<-shapiro.test(AIBL$AXT117)
+before_AXT117_transformation # 
+
+#we apply transformation to this AIBL$AXT117 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+
+AIBL$AXT117<-log(AIBL$AXT117+1)
+
+#After transformation 
+After_AXT117_transformation<-shapiro.test(AIBL$AXT117)
+After_AXT117_transformation # 
+summary(AIBL$AXT117)
+
+
+summary(AIBL$AXT11)
+ggplot(AIBL, aes(x = AXT117)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Thyroid Stimulating Hormone",
+                     breaks = seq(-0.2 ,2.2 , .03),
+                     limits=c(-0.2 ,2.2)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Thyroid Stim. Hormone") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = AXT117, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.03,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Thyroid Stimulating Hormone")
+ggtitle("Density plot of Thyroid Stimulating Hormone") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+
+```{r}
+#BAT126     BAT126; Vitamin B12  8 digits, Vitamin B12  8 digits cannot be zero or negative  
+
+AIBL$BAT126
+is.na(AIBL$BAT126)<-AIBL$BAT126<=0
+AIBL$BAT126
+complete.cases(AIBL$BAT126)
+mean(is.na(AIBL$BAT126))
+AIBL$BAT126<-Hmisc::impute(AIBL$BAT126, fun = median)
+AIBL$BAT126
+AIBL$BAT126<-as.numeric(AIBL$BAT126)
+ggqqplot(AIBL$BAT126, ylab = "Vitamin B12")
+summary(AIBL$BAT126)
+summary(AIBL$BAT126)
+density_plotBAT126<-ggplot(AIBL, aes(x = BAT126)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Vitamin B12",
+                     breaks = seq( -50,2037,200),
+                     limits=c(-50,2037)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Vitamin B12") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotBAT126
+shaded_areaBAT126<- 
+  ggplot_build(density_plotBAT126)$data[[1]] %>% 
+  filter(x < mean(AIBL$BAT126))
+
+density_plot_BAT126_shaded<-density_plotBAT126 + 
+  geom_area(data = shaded_areaBAT126, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_BAT126_shaded
+#We can from the above code see that the distribution is skewed, a positive  skew indicates a mean greater than the median
+#a positively skewed (or right-skewed) distribution is a type of distribution in which most values are clustered around the left tail of the distribution while the right tail of the distribution is longer
+
+summary(AIBL$BAT126)
+#mean is 1.939, median is 1.700 which we again demonstrate with more visualization as positively skewed 
+median_line_BAT126 <- 
+  ggplot_build(density_plotBAT126)$data[[1]] %>% 
+  filter(x <= median(AIBL$BAT126))
+median_line_BAT126 
+
+density_plot_BAT126_shaded + 
+  geom_area(data = median_line_BAT126, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, BAT126), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=BAT126, ymax=BAT126,y=BAT126), width = 0.5)+
+  ggtitle("Density plot of Vitamin B12")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "BAT126", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Vitamin B12", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$BAT126,coef=7)$out# outlier values.
+outlier_values
+
+is.na(AIBL$BAT126)<-AIBL$BAT126>2033
+AIBL$BAT126
+complete.cases(AIBL$BAT126)
+mean(is.na(AIBL$BAT126))
+AIBL$BAT126
+AIBL$BAT126<-Hmisc::impute(AIBL$BAT126, fun = median)
+AIBL$BAT126
+
+ggplot(AIBL, aes(x = BAT126)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Vitamin B12",
+                     breaks = seq( -50,2037,200),
+                     limits=c(-50,2037)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of  Vitamin B12") +
+  #geom_area(stat ="bin", fill="pink",alpha=0.5)+
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, BAT126), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=BAT126, ymax=BAT126,y=BAT126), width = 0.5)+
+  ggtitle("Density plot of Vitamin B12")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "BAT126", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Vitamin B12", xlab = "Diagnosis")
+#Test for normality
+before_BAT126_transformation<-shapiro.test(AIBL$BAT126)
+before_BAT126_transformation # 
+
+#we apply transformation to this AIBL$BAT126 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+#summary(AIBL$BAT126)
+
+AIBL$BAT126<-log(AIBL$BAT126+1)
+
+#After transformation 
+After_BAT126_transformation<-shapiro.test(AIBL$BAT126)
+After_BAT126_transformation # 
+summary(AIBL$BAT126)
+
+
+summary(AIBL$BAT126)
+ggplot(AIBL, aes(x = BAT126)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Vitamin B12",
+                     breaks = seq( 4,8,.5),
+                     limits=c(4,8)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of  Vitamin B12") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = BAT126, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.03,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Vitamin B12")
+ggtitle("Density plot of Vitamin B12") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+```
+
+
+```{r}
+#HMT3       HMT3; RBC Red blood cells  8 digits 
+AIBL$HMT3
+#RBC also know as red blood cells levels cannot be negative or zero 
+is.na(AIBL$HMT3)<-AIBL$HMT3<=0
+AIBL$HMT3
+complete.cases(AIBL$HMT3)
+mean(is.na(AIBL$HMT3))
+AIBL$HMT3<-Hmisc::impute(AIBL$HMT3, fun = median)
+AIBL$HMT3<-as.numeric(AIBL$HMT3)
+AIBL$HMT3
+
+summary(AIBL$HMT3)
+density_plotHMT3<-ggplot(AIBL, aes(x = HMT3)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Red blood cells levels",
+                     breaks = seq(3, 6,.1),
+                     limits=c(3,6)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Red blood cells") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotHMT3
+shaded_areaHMT3<- 
+  ggplot_build(density_plotHMT3)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT3))
+
+density_plot_HMT3_shaded<-density_plotHMT3 + 
+  geom_area(data = shaded_areaHMT3, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT3_shaded
+
+
+summary(AIBL$HMT3)
+#mean and median are close  
+median_line_HMT3 <- 
+  ggplot_build(density_plotHMT3)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT3))
+median_line_HMT3 
+
+density_plot_HMT3_shaded + 
+  geom_area(data = median_line_HMT3, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT3), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT3, ymax=HMT3,y=HMT3), width = 0.5)+
+  ggtitle("Density plot of Red blood cells")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT3", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Red blood cells", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$HMT3)$out# outlier values.
+outlier_values# we ingnore the outliers as the mean and median are close and it is close to normality
+
+
+ggplot(AIBL, aes(x = HMT3)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Red blood cells levels",
+                     breaks = seq(3, 6,.1),
+                     limits=c(3,6)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Red blood cells levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT3), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT3, ymax=HMT3,y=HMT3), width = 0.5)+
+  ggtitle("plot of Red blood cells levels and control Diagnosis ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT3", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Red blood cells", xlab = "Diagnosis")
+#Test for normality
+before_HMT3_transformation<-shapiro.test(AIBL$HMT3)
+before_HMT3_transformation # 
+
+#we apply transformation to this AIBL$HMT3 feature using the  reciprocal transformation, we add "1" 
+
+AIBL$HMT3<-1/( AIBL$HMT3+1)
+#After transformation 
+After_HMT3_transformation<-shapiro.test(AIBL$HMT3)
+After_HMT3_transformation # 
+summary(AIBL$HMT3)
+
+
+summary(AIBL$HMT3)
+ggplot(AIBL, aes(x = HMT3)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Red blood cells",
+                     breaks = seq( 0.11,0.24,0.01),
+                     limits=c(0.11,.24)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Red blood cells") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = HMT3, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.002,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Red blood cells")
+ggtitle("Density plot of Red blood cells level") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+AIBL$HMT7
+# know as Nucleated Red Blood Cells levels cannot be negative or zero 
+is.na(AIBL$HMT7)<-AIBL$HMT7<=0
+AIBL$HMT7
+complete.cases(AIBL$HMT7)
+mean(is.na(AIBL$HMT7))
+AIBL$HMT7<-Hmisc::impute(AIBL$HMT7, fun = median)
+AIBL$HMT7<-as.numeric(AIBL$HMT7)
+summary(AIBL$HMT7)
+ggqqplot(AIBL$HMT7, ylab = "Nucleated Red Blood Cells levels")
+
+
+density_plotHMT7<-ggplot(AIBL, aes(x = HMT7)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Vitamin B12",
+                     breaks = seq(0,15, 1),
+                     limits=c(0,15)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Nucleated Red Blood Cells") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+density_plotHMT7
+
+shaded_areaHMT7<- ggplot_build(density_plotHMT7)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT7))
+
+density_plot_HMT7_shaded<-density_plotHMT7 + 
+  geom_area(data = shaded_areaHMT7, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT7_shaded
+
+
+summary(AIBL$HMT7)
+#mean and median are close  
+median_line_HMT7 <- 
+  ggplot_build(density_plotHMT7)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT7))
+median_line_HMT7 
+
+density_plot_HMT7_shaded + 
+  geom_area(data = median_line_HMT7, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT7), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT7, ymax=HMT7,y=HMT7), width = 0.5)+
+  ggtitle("Density plot of Nucleated Red bloodcells Levels")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT7", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Nucleated Red bloodcells Levels", xlab = "Diagnosis")
+
+boxplot(AIBL$HMT7, main="Nucleated Red Blood Cells levels", boxwex=0.1)
+outlier_values <- boxplot.stats(AIBL$HMT7,coef=3)$out# outlier values.
+outlier_values
+
+
+is.na(AIBL$HMT7)<-AIBL$HMT7>11.9
+complete.cases(AIBL$HMT7)
+mean(is.na(AIBL$HMT7))
+AIBL$HMT7
+AIBL$HMT7<-Hmisc::impute(AIBL$HMT7, fun = median)
+
+summary(AIBL$HMT7)
+ggplot(AIBL, aes(x = HMT7)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Nucleated Red bloodcells Levels levels",
+                     breaks = seq(0, 12.2, 1),
+                     limits=c(0,12.2)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Nucleated Red bloodcells Levels levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT7), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT7, ymax=HMT7,y=HMT7), width = 0.5)+
+  ggtitle("plot of Nucleated Red bloodcells Levels levels and control Diagnosis ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT7", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Nucleated Red bloodcells Levels", xlab = "Diagnosis")
+#Test for normality
+before_HMT7_transformation<-shapiro.test(AIBL$HMT7)
+before_HMT7_transformation # 
+
+#we apply transformation to this AIBL$HMT7 feature using the  log transformation, we add "1" 
+AIBL$HMT7<-log(AIBL$HMT7)
+#After transformation 
+After_HMT7_transformation<-shapiro.test(AIBL$HMT7)
+After_HMT7_transformation # 
+summary(AIBL$HMT7)
+
+
+summary(AIBL$HMT7)
+ggplot(AIBL, aes(x = HMT7)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Nucleated Red bloodcells Levels",
+                     breaks = seq( 0.7,2.6,0.01),
+                     limits=c(0.7,2.6)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Nucleated Red bloodcells Levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = HMT7, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.01,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Nucleated Red bloodcells Levels")
+ggtitle("Density plot of Nucleated Red bloodcells Levels level") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+```
+
+```{r}
+#HMT13      HMT13; Platelets 8 digits 
+AIBL$HMT13
+#RBC plaletets from  red blood cells levels cannot be negative or zero 
+is.na(AIBL$HMT13)<-AIBL$HMT13<=0
+AIBL$HMT13
+complete.cases(AIBL$HMT13)
+mean(is.na(AIBL$HMT13))
+AIBL$HMT13<-Hmisc::impute(AIBL$HMT13, fun = median)
+AIBL$HMT13<-as.numeric(AIBL$HMT13)
+ggqqplot(AIBL$HMT13, ylab = "plaletets from  red blood cells")
+
+summary(AIBL$HMT13)
+
+density_plotHMT13<-ggplot(AIBL, aes(x = HMT13)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "RBC Platetets",
+                     breaks = seq(10,600,30),
+                     limits=c(10,600)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of  Platelets") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotHMT13
+shaded_areaHMT13<- 
+  ggplot_build(density_plotHMT13)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT13))
+
+density_plot_HMT13_shaded<-density_plotHMT13 + 
+  geom_area(data = shaded_areaHMT13, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT13_shaded
+
+
+summary(AIBL$HMT13)
+#mean and median are close  
+median_line_HMT13 <- 
+  ggplot_build(density_plotHMT13)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT13))
+median_line_HMT13 
+
+density_plot_HMT13_shaded + 
+  geom_area(data = median_line_HMT13, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT13), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT13, ymax=HMT13,y=HMT13), width = 0.5)+
+  ggtitle("Density plot of plaletets from  red blood cells")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT13", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "plaletets from  red blood cells", xlab = "Diagnosis")
+
+
+
+ggplot(AIBL, aes(x = HMT13)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "RBC plaletets from  red blood cells levels",
+                     breaks = seq(10, 455,5),
+                     limits=c(10, 455)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of RBC plaletets from  red blood cells levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT13), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT13, ymax=HMT13,y=HMT13), width = 0.5)+
+  ggtitle("plot of RBC plaletets from  red blood cells levels and control Diagnosis ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT13", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "RBC plaletets from  red blood cells levels", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$HMT13)$out# outlier values.
+outlier_values
+boxplot(AIBL$HMT13, main="plaletets from  red blood cells", boxwex=0.1)
+summary(AIBL$HMT13)
+outlier_values <- boxplot.stats(AIBL$HMT13,coef=2)$out# outlier values.
+outlier_values 
+
+
+#Transforming data can help deal with outliers 
+#Test for normality
+before_HMT13_transformation<-shapiro.test(AIBL$HMT13)#W = 0.98644, p-value = 3.954e-07
+before_HMT13_transformation # 
+
+
+AIBL$HMT13<-sqrt(AIBL$HMT13)
+#After transformation 
+After_HMT13_transformation<-shapiro.test(AIBL$HMT13)
+After_HMT13_transformation # 
+summary(AIBL$HMT13)
+
+summary(AIBL$HMT13)
+ggplot(AIBL, aes(x = HMT13)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Red blood cells",
+                     breaks = seq( 0,26,1),
+                     limits=c( 2,26)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Red blood cells") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = HMT13, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.2,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Red blood cells")
+ggtitle("Density plot of Red blood cells level") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+```{r}
+#MCH levels cannot be negative or zero
+AIBL$HMT100
+is.na(AIBL$HMT100)<-AIBL$HMT100<=0
+AIBL$HMT100
+complete.cases(AIBL$HMT100)
+mean(is.na(AIBL$HMT100))
+AIBL$HMT100<-Hmisc::impute(AIBL$HMT100, fun = median)
+AIBL$HMT100<-as.numeric(AIBL$HMT100)
+summary(AIBL$HMT100)
+density_plotHMT100<-ggplot(AIBL, aes(x = HMT100)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCH levels ",
+                     breaks = seq( 19,40,1),
+                     limits=c(19,40)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCH levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotHMT100
+shaded_areaHMT100<- 
+  ggplot_build(density_plotHMT100)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT100))
+
+density_plot_HMT100_shaded<-density_plotHMT100 + 
+  geom_area(data = shaded_areaHMT100, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT100_shaded
+
+
+summary(AIBL$HMT100)
+
+median_line_HMT100 <- 
+  ggplot_build(density_plotHMT100)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT100))
+median_line_HMT100 
+
+density_plot_HMT100_shaded + 
+  geom_area(data = median_line_HMT100, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT100), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT100, ymax=HMT100,y=HMT100), width = 0.5)+
+  ggtitle("Density plot of MCH levels ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT100", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "MCH levels ", xlab = "Diagnosis")
+summary(AIBL$HMT100)
+outlier_values <- boxplot.stats(AIBL$HMT100,coef=7)$out# outlier values.
+outlier_values
+
+is.na(AIBL$HMT100)<-AIBL$HMT100>2033
+AIBL$HMT100
+complete.cases(AIBL$HMT100)
+mean(is.na(AIBL$HMT100))
+AIBL$HMT100
+AIBL$HMT100<-Hmisc::impute(AIBL$HMT100, fun = median)
+AIBL$HMT100
+
+ggplot(AIBL, aes(x = HMT100)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCH levels ",
+                     breaks = seq( 19,40,1),
+                     limits=c(19,40)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCH levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT100), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT100, ymax=HMT100,y=HMT100), width = 0.5)+
+  ggtitle("Density plot of MCH levels ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT100", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "MCH levels ", xlab = "Diagnosis")
+#Test for normality
+before_HMT100_transformation<-shapiro.test(AIBL$HMT100)
+before_HMT100_transformation # 
+
+#we apply transformation to this AIBL$HMT100 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+#summary(AIBL$HMT100)
+
+AIBL$HMT100<-log(AIBL$HMT100+1)
+
+#After transformation 
+After_HMT100_transformation<-shapiro.test(AIBL$HMT100)
+After_HMT100_transformation # 
+summary(AIBL$HMT100)
+
+
+summary(AIBL$HMT100)
+ggplot(AIBL, aes(x = HMT100)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCH levels ",
+                     breaks = seq( 2.9,3.9,.1),
+                     limits=c(2.9,3.9)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCH levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = HMT100, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.01,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "MCH levels ")
+ggtitle("Density plot of MCH levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+
+```
+
+```{r}
+#MCHC levels cannot be negative or zero
+AIBL$HMT102
+is.na(AIBL$HMT102)<-AIBL$HMT102<=0
+AIBL$HMT102
+complete.cases(AIBL$HMT102)
+mean(is.na(AIBL$HMT102))
+AIBL$HMT102<-Hmisc::impute(AIBL$HMT102, fun = median)
+AIBL$HMT102<-as.numeric(AIBL$HMT102)
+summary(AIBL$HMT102)
+density_plotHMT102<-ggplot(AIBL, aes(x = HMT102)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCHC levels ",
+                     breaks = seq( 29,39,1),
+                     limits=c(29,39)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCHC Levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotHMT102
+shaded_areaHMT102<- 
+  ggplot_build(density_plotHMT102)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT102))
+
+density_plot_HMT102_shaded<-density_plotHMT102 + 
+  geom_area(data = shaded_areaHMT102, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT102_shaded
+
+summary(AIBL$HMT102)
+#mean is 1.939, median is 1.700 which we again demonstrate with more visualization as positively skewed 
+median_line_HMT102 <- 
+  ggplot_build(density_plotHMT102)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT102))
+median_line_HMT102 
+
+density_plot_HMT102_shaded + 
+  geom_area(data = median_line_HMT102, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT102), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT102, ymax=HMT102,y=HMT102), width = 0.5)+
+  ggtitle("Density plot of MCHC levels ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT102", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "MCHC levels ", xlab = "Diagnosis")
+summary(AIBL$HMT102)
+outlier_values <- boxplot.stats(AIBL$HMT102)$out# outlier values.
+outlier_values
+
+ggplot(AIBL, aes(x = HMT102)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCHC levels ",
+                     breaks = seq( 29,39,1),
+                     limits=c(29,39)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCHC levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT102), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT102, ymax=HMT102,y=HMT102), width = 0.5)+
+  ggtitle("Density plot of MCHC levels ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT102", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "MCHC levels ", xlab = "Diagnosis")
+#Test for normality
+before_HMT102_transformation<-shapiro.test(AIBL$HMT102)
+before_HMT102_transformation # 
+
+#we apply transformation to this AIBL$HMT102 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+#summary(AIBL$HMT102)
+
+AIBL$HMT102<-log(AIBL$HMT102+1)
+
+#After transformation 
+After_HMT102_transformation<-shapiro.test(AIBL$HMT102)
+After_HMT102_transformation # 
+summary(AIBL$HMT102)
+
+
+summary(AIBL$HMT102)
+ggplot(AIBL, aes(x = HMT102)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "MCHC levels ",
+                     breaks = seq( 3.47,3.64,.05),
+                     limits=c(3.47,3.64)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of MCHC levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = HMT102, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.001,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "MCHC levels ")
+ggtitle("Density plot of MCHC levels ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+```{r}
+#HMT40      HMT40; Hemoglobin 8 digits 
+#heamoglobin  levels cannot be negative or zero 
+AIBL$HMT40
+is.na(AIBL$HMT40)<-AIBL$HMT40<=0
+AIBL$HMT40
+complete.cases(AIBL$HMT40)
+mean(is.na(AIBL$HMT40))
+AIBL$HMT40<-Hmisc::impute(AIBL$HMT40, fun = median)
+AIBL$HMT40
+AIBL$HMT40<-as.numeric(AIBL$HMT40)
+ggqqplot(AIBL$HMT40, ylab = "Heamoglobin  levels")
+summary(AIBL$HMT40)
+density_plotHMT40<-ggplot(AIBL, aes(x = HMT40)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Heamoglobin  levels",
+                     breaks = seq( 9.3,18.5,1),
+                     limits=c(9.3,18.3)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Heamoglobin  levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotHMT40
+shaded_areaHMT40<- 
+  ggplot_build(density_plotHMT40)$data[[1]] %>% 
+  filter(x < mean(AIBL$HMT40))
+
+density_plot_HMT40_shaded<-density_plotHMT40 + 
+  geom_area(data = shaded_areaHMT40, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_HMT40_shaded
+
+
+summary(AIBL$HMT40)
+
+median_line_HMT40 <- 
+  ggplot_build(density_plotHMT40)$data[[1]] %>% 
+  filter(x <= median(AIBL$HMT40))
+median_line_HMT40 
+
+density_plot_HMT40_shaded + 
+  geom_area(data = median_line_HMT40, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT40), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT40, ymax=HMT40,y=HMT40), width = 0.5)+
+  ggtitle("Density plot of Heamoglobin  levels")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT40", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Heamoglobin  levels", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$HMT40)$out# outlier values.
+outlier_values
+
+
+ggplot(AIBL, aes(x = HMT40)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Heamoglobin  levels",
+                     breaks = seq( 9.3,18.5,1),
+                     limits=c(9.3,18.3)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Heamoglobin  levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, HMT40), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=HMT40, ymax=HMT40,y=HMT40), width = 0.5)+
+  ggtitle("Density plot of Heamoglobin  levels")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "HMT40", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Heamoglobin  levels", xlab = "Diagnosis")
+#Test for normality
+before_HMT40_transformation<-shapiro.test(AIBL$HMT40)
+before_HMT40_transformation # 
+
+#W = 0.99199, p-value = 0.0001344 # we not transformed, we tried different transformation but the original P value was better 
+
+ggplot(AIBL, aes(x = HMT40, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.04,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Heamoglobin  levels")
+ggtitle("Density plot of Heamoglobin  levels") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+
+```{r}
+AIBL$RCT6
+is.na(AIBL$RCT6)<-AIBL$RCT6<=0
+AIBL$RCT6
+complete.cases(AIBL$RCT6)
+mean(is.na(AIBL$RCT6))
+AIBL$RCT6<-Hmisc::impute(AIBL$RCT6, fun = median)
+AIBL$RCT6
+AIBL$RCT6<-as.numeric(AIBL$RCT6)
+ggqqplot(AIBL$RCT6, ylab = "Urea Nitrogen")
+summary(AIBL$RCT6)
+summary(AIBL$RCT6)
+density_plotRCT6<-ggplot(AIBL, aes(x = RCT6)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Urea Nitrogen",
+                     breaks = seq( 10,160,5),
+                     limits=c(10,160)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Urea Nitrogen") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotRCT6
+shaded_areaRCT6<- 
+  ggplot_build(density_plotRCT6)$data[[1]] %>% 
+  filter(x < mean(AIBL$RCT6))
+
+density_plot_RCT6_shaded<-density_plotRCT6 + 
+  geom_area(data = shaded_areaRCT6, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_RCT6_shaded
+
+
+summary(AIBL$RCT6)
+
+median_line_RCT6 <- 
+  ggplot_build(density_plotRCT6)$data[[1]] %>% 
+  filter(x <= median(AIBL$RCT6))
+median_line_RCT6 
+
+density_plot_RCT6_shaded + 
+  geom_area(data = median_line_RCT6, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT6), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT6, ymax=RCT6,y=RCT6), width = 0.5)+
+  ggtitle("Density plot of Urea Nitrogen")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT6", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Urea Nitrogen", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$RCT6,coef=1)$out# outlier values.
+outlier_values
+summary(AIBL$RCT6)
+is.na(AIBL$RCT6)<-AIBL$RCT6>115
+AIBL$RCT6
+complete.cases(AIBL$RCT6)
+mean(is.na(AIBL$RCT6))
+AIBL$RCT6
+AIBL$RCT6<-Hmisc::impute(AIBL$RCT6, fun = median)
+AIBL$RCT6
+
+ggplot(AIBL, aes(x = RCT6)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Urea Nitrogen",
+                     breaks = seq( 13,81, 3),
+                     limits=c(13,81)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Urea Nitrogen") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT6), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT6, ymax=RCT6,y=RCT6), width = 0.5)+
+  ggtitle("plot of Urea Nitrogen")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT6", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Urea Nitrogen", xlab = "Diagnosis")
+#Test for normality
+before_RCT6_transformation<-shapiro.test(AIBL$RCT6)
+before_RCT6_transformation # 
+
+#we apply transformation to this AIBL$RCT6 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+#summary(AIBL$RCT6)
+
+AIBL$RCT6<-log(AIBL$RCT6+1)
+summary(AIBL$RCT6)
+
+#After transformation 
+After_RCT6_transformation<-shapiro.test(AIBL$RCT6)
+After_RCT6_transformation # 
+summary(AIBL$RCT6)
+
+
+summary(AIBL$RCT6)
+ggplot(AIBL, aes(x = RCT6)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Urea Nitrogen",
+                     breaks = seq( 1.3,1.7,.01),
+                     limits=c(1.3,1.7)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Urea Nitrogen") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = RCT6, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.005,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Urea Nitrogen")
+ggtitle("Density plot of Urea Nitrogen") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+```{r}
+AIBL$RCT11
+is.na(AIBL$RCT11)<-AIBL$RCT11<=0
+AIBL$RCT11
+complete.cases(AIBL$RCT11)
+mean(is.na(AIBL$RCT11))
+AIBL$RCT11<-Hmisc::impute(AIBL$RCT11, fun = median)
+AIBL$RCT11
+AIBL$RCT11<-as.numeric(AIBL$RCT11)
+ggqqplot(AIBL$RCT11, ylab = "Serum Glucose")
+summary(AIBL$RCT11)
+summary(AIBL$RCT11)
+density_plotRCT11<-ggplot(AIBL, aes(x = RCT11)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Serum Glucose",
+                     breaks = seq( 46,235,5),
+                     limits=c( 46,235)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Serum Glucose") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotRCT11
+shaded_areaRCT11<- 
+  ggplot_build(density_plotRCT11)$data[[1]] %>% 
+  filter(x < mean(AIBL$RCT11))
+
+density_plot_RCT11_shaded<-density_plotRCT11 + 
+  geom_area(data = shaded_areaRCT11, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_RCT11_shaded
+
+
+summary(AIBL$RCT11)
+
+median_line_RCT11 <- 
+  ggplot_build(density_plotRCT11)$data[[1]] %>% 
+  filter(x <= median(AIBL$RCT11))
+median_line_RCT11 
+
+density_plot_RCT11_shaded + 
+  geom_area(data = median_line_RCT11, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT11), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT11, ymax=RCT11,y=RCT11), width = 0.5)+
+  ggtitle("Density plot of Serum Glucose")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT11", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Serum Glucose", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$RCT11,coef=4)$out# outlier values.
+outlier_values
+summary(AIBL$RCT11)
+is.na(AIBL$RCT11)<-AIBL$RCT11>230
+AIBL$RCT11
+complete.cases(AIBL$RCT11)
+mean(is.na(AIBL$RCT11))
+AIBL$RCT11
+AIBL$RCT11<-Hmisc::impute(AIBL$RCT11, fun = median)
+AIBL$RCT11
+
+ggplot(AIBL, aes(x = RCT11)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Serum Glucose",
+                     breaks = seq( 46,200,5),
+                     limits=c( 46,200)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Serum Glucose") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT11), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT11, ymax=RCT11,y=RCT11), width = 0.5)+
+  ggtitle("plot of Serum Glucose")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT11", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Serum Glucose", xlab = "Diagnosis")
+#Test for normality
+before_RCT11_transformation<-shapiro.test(AIBL$RCT11)
+before_RCT11_transformation # 
+
+#we apply transformation to this AIBL$RCT11 feature using the log transformation, we add "1" to the log value to remove negative numbers 
+#summary(AIBL$RCT11)
+
+AIBL$RCT11<-log(AIBL$RCT11+1)
+summary(AIBL$RCT11)
+
+#After transformation 
+After_RCT11_transformation<-shapiro.test(AIBL$RCT11)
+After_RCT11_transformation # 
+summary(AIBL$RCT11)
+
+
+summary(AIBL$RCT11)
+ggplot(AIBL, aes(x = RCT11)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Serum Glucose",
+                     breaks = seq(3.8,5.4,.01),
+                     limits=c(3.8,5.4)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Serum Glucose") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = RCT11, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.005,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Serum Glucose")
+ggtitle("Density plot of Serum Glucose") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+```
+
+```{r}
+#AIBL$RCT20 "Density plot of Cholesterol (High Performance)"
+is.na(AIBL$RCT20)<-AIBL$RCT20<=0
+AIBL$RCT20
+complete.cases(AIBL$RCT20)
+mean(is.na(AIBL$RCT20))
+AIBL$RCT20<-Hmisc::impute(AIBL$RCT20, fun = median)
+AIBL$RCT20
+AIBL$RCT20<-as.numeric(AIBL$RCT20)
+ggqqplot(AIBL$RCT20, ylab = "Cholesterol (High Performance)")
+summary(AIBL$RCT20)
+
+density_plotRCT20<-ggplot(AIBL, aes(x = RCT20)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Cholesterol (High Performance)",
+                     breaks = seq( 90,370,5),
+                     limits=c(90,370)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Cholesterol (High Performance)") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotRCT20
+shaded_areaRCT20<- 
+  ggplot_build(density_plotRCT20)$data[[1]] %>% 
+  filter(x < mean(AIBL$RCT20))
+
+density_plot_RCT20_shaded<-density_plotRCT20 + 
+  geom_area(data = shaded_areaRCT20, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_RCT20_shaded
+
+summary(AIBL$RCT20)
+median_line_RCT20 <- 
+  ggplot_build(density_plotRCT20)$data[[1]] %>% 
+  filter(x <= median(AIBL$RCT20))
+median_line_RCT20 
+
+density_plot_RCT20_shaded + 
+  geom_area(data = median_line_RCT20, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT20), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT20, ymax=RCT20,y=RCT20), width = 0.5)+
+  ggtitle("Density plot of Cholesterol (High Performance)")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT20", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Cholesterol (High Performance)", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$RCT20,coef=2)$out# outlier values.
+outlier_values
+summary(AIBL$RCT20)
+
+
+
+ggplot(AIBL, aes(x = RCT20)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Cholesterol (High Performance)",
+                     breaks = seq( 90,370,5),
+                     limits=c(90,370)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Cholesterol (High Performance)") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT20), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT20, ymax=RCT20,y=RCT20), width = 0.5)+
+  ggtitle("plot of Cholesterol (High Performance)")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT20", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Cholesterol (High Performance)", xlab = "Diagnosis")
+#Test for normality
+NormalityRCT20test<-shapiro.test(AIBL$RCT20)
+NormalityRCT20test # 
+#W = 0.99345, p-value = 0.0008218
+
+ggplot(AIBL, aes(x = RCT20, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =1)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Cholesterol (High Performance)")
+ggtitle("Density plot of Cholesterol (High Performance)") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+```
+
+```{r}
+AIBL$RCT392
+is.na(AIBL$RCT392)<-AIBL$RCT392<=0
+AIBL$RCT392
+complete.cases(AIBL$RCT392)
+mean(is.na(AIBL$RCT392))
+AIBL$RCT392<-Hmisc::impute(AIBL$RCT392, fun = median)
+AIBL$RCT392
+AIBL$RCT392<-as.numeric(AIBL$RCT392)
+ggqqplot(AIBL$RCT392, ylab = "Creatinine")
+summary(AIBL$RCT392)
+density_plotRCT392<-ggplot(AIBL, aes(x = RCT392)) +
+  geom_density(colour = "green", fill= "#56B4E9") +
+  scale_x_continuous(name = "Creatinine ",
+                     breaks = seq( 0.2,1.93,.1),
+                     limits=c(0.2,1.93)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Creatinine ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+density_plotRCT392
+shaded_areaRCT392<- 
+  ggplot_build(density_plotRCT392)$data[[1]] %>% 
+  filter(x < mean(AIBL$RCT392))
+
+density_plot_RCT392_shaded<-density_plotRCT392 + 
+  geom_area(data = shaded_areaRCT392, aes(x = x, y = y), fill="pink", alpha = 0.5)
+density_plot_RCT392_shaded
+
+
+summary(AIBL$RCT392)
+
+median_line_RCT392 <- 
+  ggplot_build(density_plotRCT392)$data[[1]] %>% 
+  filter(x <= median(AIBL$RCT392))
+median_line_RCT392 
+
+density_plot_RCT392_shaded + 
+  geom_area(data = median_line_RCT392, aes(x = x, y = y), fill="blue", alpha = 0.5)
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT392), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT392, ymax=RCT392,y=RCT392), width = 0.5)+
+  ggtitle("Density plot of Creatinine ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT392", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Creatinine ", xlab = "Diagnosis")
+
+outlier_values <- boxplot.stats(AIBL$RCT392,coef=2)$out# outlier values.
+outlier_values
+summary(AIBL$RCT392)
+
+
+ggplot(AIBL, aes(x = RCT392)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Creatinine ",
+                     breaks = seq( 0.2,1.93,.1),
+                     limits=c(0.2,1.93)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Creatinine ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot()+
+  geom_jitter(aes(DXCURREN, RCT392), data = AIBL, colour ="red", palette = c("#00AFBB", "#E7B800"), 
+              position = position_jitter(width = 0.05)) +
+  geom_point(data=AIBL,aes(x=DXCURREN,ymin=RCT392, ymax=RCT392,y=RCT392), width = 0.5)+
+  ggtitle("plot of Creatinine ")
+
+
+ggboxplot(AIBL, x = "DXCURREN", y = "RCT392", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Creatinine ", xlab = "Diagnosis")
+#Test for normality
+before_RCT392_transformation<-shapiro.test(AIBL$RCT392)
+before_RCT392_transformation # 
+
+
+AIBL$RCT392<-sqrt(AIBL$RCT392)
+summary(AIBL$RCT392)
+
+#After transformation 
+After_RCT392_transformation<-shapiro.test(AIBL$RCT392)
+After_RCT392_transformation # 
+summary(AIBL$RCT392)
+
+
+summary(AIBL$RCT392)
+ggplot(AIBL, aes(x = RCT392)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "Creatinine ",
+                     breaks = seq( 0.3,1.4,0.01),
+                     limits=c(0.3,1.4))  +
+  scale_y_continuous(name = "Density") +
+  ggtitle("Density plot of Creatinine ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+ggplot(AIBL, aes(x = RCT392, fill = DXCURREN)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  geom_histogram(binwidth =.005,)+
+  scale_y_continuous(name = "Density") +
+  scale_x_continuous(name = "Creatinine ")
+ggtitle("Density plot of Creatinine ") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+```
+
+```{r}
+#MHPSYCH    Psychiatric 1=Yes; 0=No,  1 digit 
+AIBL$MHPSYCH
+#1 is Psychiatric and 0 is non Psychiatric 
+is.na(AIBL$MHPSYCH)<-AIBL$MHPSYCH<0|AIBL$MHPSYCH>1
+AIBL$MHPSYCH
+complete.cases(AIBL$MHPSYCH)
+mean(is.na(AIBL$MHPSYCH))
+AIBL[is.na(AIBL)] = 0
+AIBL$MHPSYCH<-as.factor(AIBL$MHPSYCH)
+AIBL$MHPSYCH
+
+AIBL$MHPSYCH<-as.factor(AIBL$MHPSYCH)
+#str(AIBL$MHPSYCH)
+
+MHPSYCHdata<-AIBL %>%
+  count(MHPSYCH) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MHPSYCHdata, 
+       aes(x = reorder(MHPSYCH, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MHPSYCH", 
+       y = "Percentage", 
+       title  = "Psychiatric ")
+
+ggplot(AIBL, 
+       aes(x = MHPSYCH, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MHPSYCHDXdata<- data.frame(AIBL$MHPSYCH,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MHPSYCHDXdata = table(AIBL$MHPSYCH,AIBL$DXCURREN) 
+print(MHPSYCHDXdata)
+
+# Perform the Chi-Square test.
+MHPSYCHchisq<-chisq.test(MHPSYCHDXdata)
+print(MHPSYCHchisq)
+
+MHPSYCHchisq$p.value
+
+MHPSYCHchisq$observed
+MHPSYCHchisq$expected
+round(MHPSYCHchisq$expected,2)
+
+round(MHPSYCHchisq$residuals, 3)
+corrplot(MHPSYCHchisq$residuals, is.cor = FALSE)
+contribMHPSYCH<- 100*MHPSYCHchisq$residuals^2/APGEN1chisq$statistic
+round(contribMHPSYCH, 3)
+corrplot(contribMHPSYCH, is.cor = FALSE)
+
+```
+
+```{r}
+#MH2NEURL   Neurologic (other than AD)  1=Yes; 0=No 1 digit 
+AIBL$MH2NEURL
+#Neurological 1 is yes and 0 is no 
+is.na(AIBL$MH2NEURL)<-AIBL$MH2NEURL<0|AIBL$MH2NEURL>1
+AIBL$MH2NEURL
+complete.cases(AIBL$MH2NEURL)
+mean(is.na(AIBL$MH2NEURL))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH2NEURL<-as.factor(AIBL$MH2NEURL)
+#str(AIBL$MH2NEURL)
+
+MH2NEURLdata<-AIBL %>%
+  count(MH2NEURL) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH2NEURLdata, 
+       aes(x = reorder(MH2NEURL, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH2NEURL", 
+       y = "Percentage", 
+       title  = "Neurologic ")
+
+ggplot(AIBL, 
+       aes(x = MH2NEURL, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH2NEURLDXdata<- data.frame(AIBL$MH2NEURL,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH2NEURLDXdata = table(AIBL$MH2NEURL,AIBL$DXCURREN) 
+print(MH2NEURLDXdata)
+
+# Perform the Chi-Square test.
+MH2NEURLchisq<-chisq.test(MH2NEURLDXdata)
+print(MH2NEURLchisq)
+
+MH2NEURLchisq$p.value
+
+MH2NEURLchisq$observed
+MH2NEURLchisq$expected
+round(MH2NEURLchisq$expected,2)
+
+round(MH2NEURLchisq$residuals, 3)
+corrplot(MH2NEURLchisq$residuals, is.cor = FALSE)
+contribMH2NEURL<- 100*MH2NEURLchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH2NEURL, 3)
+corrplot(contribMH2NEURL, is.cor = FALSE)
+
+```
+
+```{r}
+#MH4CARD    Cardiovascular  1 digit
+AIBL$MH4CARD 
+is.na(AIBL$MH4CARD )<-AIBL$MH4CARD<0|AIBL$MH4CARD>1
+AIBL$MH4CARD 
+complete.cases(AIBL$MH4CARD)
+mean(is.na(AIBL$MH4CARD ))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH4CARD<-as.factor(AIBL$MH4CARD)
+AIBL$MH4CARD
+
+MH4CARDdata<-AIBL %>%
+  count(MH4CARD) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH4CARDdata, 
+       aes(x = reorder(MH4CARD, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH4CARD", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH4CARD, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH4CARDDXdata<- data.frame(AIBL$MH4CARD,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH4CARDDXdata = table(AIBL$MH4CARD,AIBL$DXCURREN) 
+print(MH4CARDDXdata)
+
+# Perform the Chi-Square test.
+MH4CARDchisq<-chisq.test(MH4CARDDXdata)
+print(MH4CARDchisq)
+
+MH4CARDchisq$p.value
+
+MH4CARDchisq$observed
+MH4CARDchisq$expected
+round(MH4CARDchisq$expected,2)
+round(MH4CARDchisq$residuals, 3)
+corrplot(MH4CARDchisq$residuals, is.cor = FALSE)
+contribMH4CARD<- 100*MH4CARDchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH4CARD, 3)
+corrplot(contribMH4CARD, is.cor = FALSE)
+
+
+```
+
+```{r}
+#MH6HEPAT   Hepatic 1 digit
+AIBL$MH6HEPAT
+is.na(AIBL$MH6HEPAT)<-AIBL$MH6HEPAT<0|AIBL$MH6HEPAT>1
+AIBL$MH6HEPAT
+complete.cases(AIBL$MH6HEPAT)
+mean(is.na(AIBL$MH6HEPAT))
+# because the hepatic is either 1 or 0
+AIBL[is.na(AIBL)] = 0
+AIBL$MH6HEPAT<-as.factor(AIBL$MH6HEPAT)
+
+MH6HEPATdata<-AIBL %>%
+  count(MH6HEPAT) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH6HEPATdata, 
+       aes(x = reorder(MH6HEPAT, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH6HEPAT", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH6HEPAT, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH6HEPATDXdata<- data.frame(AIBL$MH6HEPAT,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH6HEPATDXdata = table(AIBL$MH6HEPAT,AIBL$DXCURREN) 
+print(MH6HEPATDXdata)
+
+# Perform the Chi-Square test.
+MH6HEPATchisq<-chisq.test(MH6HEPATDXdata)
+print(MH6HEPATchisq)
+
+MH6HEPATchisq$p.value
+
+MH6HEPATchisq$observed
+MH6HEPATchisq$expected
+round(MH6HEPATchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(MH6HEPATchisq$residuals, 3)
+corrplot(MH6HEPATchisq$residuals, is.cor = FALSE)
+contribMH6HEPAT<- 100*MH6HEPATchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH6HEPAT, 3)
+corrplot(contribMH6HEPAT, is.cor = FALSE)
+
+```
+
+```{r}
+#MH8MUSCL   Musculoskeletal, 1 digit 
+AIBL$MH8MUSCL
+is.na(AIBL$MH8MUSCL)<-AIBL$MH8MUSCL<0|AIBL$MH8MUSCL>1
+AIBL$MH8MUSCL
+complete.cases(AIBL$MH8MUSCL)
+mean(is.na(AIBL$MH8MUSCL))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH8MUSCL<-as.factor(AIBL$MH8MUSCL)
+
+
+MH8MUSCLdata<-AIBL %>%
+  count(MH8MUSCL) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH8MUSCLdata, 
+       aes(x = reorder(MH8MUSCL, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH8MUSCL", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH8MUSCL, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH8MUSCLDXdata<- data.frame(AIBL$MH8MUSCL,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH8MUSCLDXdata = table(AIBL$MH8MUSCL,AIBL$DXCURREN) 
+print(MH8MUSCLDXdata)
+
+# Perform the Chi-Square test.
+MH8MUSCLchisq<-chisq.test(MH8MUSCLDXdata)
+print(MH8MUSCLchisq)
+
+MH8MUSCLchisq$p.value
+
+MH8MUSCLchisq$observed
+MH8MUSCLchisq$expected
+round(MH8MUSCLchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(MH8MUSCLchisq$residuals, 3)
+corrplot(MH8MUSCLchisq$residuals, is.cor = FALSE)
+contribMH8MUSCL<- 100*MH8MUSCLchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH8MUSCL, 3)
+corrplot(contribMH8MUSCL, is.cor = FALSE)
+
+```
+
+```{r}
+#MH9ENDO    Endocrine-Metabolic, 1 digit
+AIBL$MH9ENDO
+is.na(AIBL$MH9ENDO)<-AIBL$MH9ENDO<0|AIBL$MH9ENDO>1
+AIBL$MH9ENDO
+complete.cases(AIBL$MH9ENDO)
+mean(is.na(AIBL$MH9ENDO))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH9ENDO<-as.factor(AIBL$MH9ENDO)
+MH9ENDOdata<-AIBL %>%
+  count(MH9ENDO) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH9ENDOdata, 
+       aes(x = reorder(MH9ENDO, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH9ENDO", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH9ENDO, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH9ENDODXdata<- data.frame(AIBL$MH9ENDO,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH9ENDODXdata = table(AIBL$MH9ENDO,AIBL$DXCURREN) 
+print(MH9ENDODXdata)
+
+# Perform the Chi-Square test.
+MH9ENDOchisq<-chisq.test(MH9ENDODXdata)
+print(MH9ENDOchisq)
+
+MH9ENDOchisq$p.value
+
+MH9ENDOchisq$observed
+MH9ENDOchisq$expected
+round(MH9ENDOchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(MH9ENDOchisq$residuals, 3)
+corrplot(MH9ENDOchisq$residuals, is.cor = FALSE)
+contribMH9ENDO<- 100*MH9ENDOchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH9ENDO, 3)
+corrplot(contribMH9ENDO, is.cor = FALSE)
+
+```
+
+```{r}
+#MH10GAST   Gastrointestinal, 1 digit 
+AIBL$MH10GAST
+is.na(AIBL$MH10GAST)<-AIBL$MH10GAST<0|AIBL$MH10GAST>1
+AIBL$MH10GAST
+complete.cases(AIBL$MH10GAST)
+mean(is.na(AIBL$MH10GAST))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH10GAST<-as.factor(AIBL$MH10GAST)
+AIBL$MH10GAST
+MH10GASTdata<-AIBL %>%
+  count(MH10GAST) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH10GASTdata, 
+       aes(x = reorder(MH10GAST, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH10GAST", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH10GAST, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH10GASTDXdata<- data.frame(AIBL$MH10GAST,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH10GASTDXdata = table(AIBL$MH10GAST,AIBL$DXCURREN) 
+print(MH10GASTDXdata)
+
+# Perform the Chi-Square test.
+MH10GASTchisq<-chisq.test(MH10GASTDXdata)
+print(MH10GASTchisq)
+
+MH10GASTchisq$p.value
+
+MH10GASTchisq$observed
+MH10GASTchisq$expected
+round(MH10GASTchisq$expected,2)
+round(MH10GASTchisq$residuals, 3)
+corrplot(MH10GASTchisq$residuals, is.cor = FALSE)
+contribMH10GAST<- 100*MH10GASTchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH10GAST, 3)
+corrplot(contribMH10GAST, is.cor = FALSE)
+
+```
+
+```{r}
+#MH12RENA   Renal-Genitourinary, 1 digit 
+AIBL$MH12RENA #Renal-Genituourinary is 0 or 1
+is.na(AIBL$MH12RENA)<-AIBL$MH12RENA<0|AIBL$MH12RENA>1
+AIBL$MH12RENA
+complete.cases(AIBL$MH12RENA)
+mean(is.na(AIBL$MH12RENA))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH12RENA<-as.numeric(AIBL$MH12RENA)
+AIBL$MH12RENA<-as.factor(AIBL$MH12RENA)
+
+MH12RENAdata<-AIBL %>%
+  count(MH12RENA) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH12RENAdata, 
+       aes(x = reorder(MH12RENA, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH12RENA", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH12RENA, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH12RENADXdata<- data.frame(AIBL$MH12RENA,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH12RENADXdata = table(AIBL$MH12RENA,AIBL$DXCURREN) 
+print(MH12RENADXdata)
+
+# Perform the Chi-Square test.
+MH12RENAchisq<-chisq.test(MH12RENADXdata)
+print(MH12RENAchisq)
+
+MH12RENAchisq$p.value
+
+MH12RENAchisq$observed
+MH12RENAchisq$expected
+round(MH12RENAchisq$expected,2)
+round(MH12RENAchisq$residuals, 3)
+corrplot(MH12RENAchisq$residuals, is.cor = FALSE)
+contribMH12RENA<- 100*MH12RENAchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH12RENA, 3)
+corrplot(contribMH12RENA, is.cor = FALSE)
+
+```
+
+```{r}
+#MH16SMOK   Smoking, 1 digit 
+AIBL$MH16SMOK
+is.na(AIBL$MH16SMOK)<-AIBL$MH16SMOK<0|AIBL$MH16SMOK>1
+AIBL$MH16SMOK
+complete.cases(AIBL$MH16SMOK)
+mean(is.na(AIBL$MH16SMOK))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH16SMOK<-as.numeric(AIBL$MH16SMOK)
+AIBL$MH16SMOK<-as.factor(AIBL$MH16SMOK)
+
+MH16SMOKdata<-AIBL %>%
+  count(MH16SMOK) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH16SMOKdata, 
+       aes(x = reorder(MH16SMOK, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH16SMOK", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH16SMOK, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH16SMOKDXdata<- data.frame(AIBL$MH16SMOK,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH16SMOKDXdata = table(AIBL$MH16SMOK,AIBL$DXCURREN) 
+print(MH16SMOKDXdata)
+
+# Perform the Chi-Square test.
+MH16SMOKchisq<-chisq.test(MH16SMOKDXdata)
+print(MH16SMOKchisq)
+
+MH16SMOKchisq$p.value
+
+MH16SMOKchisq$observed
+MH16SMOKchisq$expected
+round(MH16SMOKchisq$expected,2)
+round(MH16SMOKchisq$residuals, 3)
+corrplot(MH16SMOKchisq$residuals, is.cor = FALSE)
+contribMH16SMOK<- 100*MH16SMOKchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH16SMOK, 3)
+corrplot(contribMH16SMOK, is.cor = FALSE)
+
+```
+
+
+```{r}
+#MH17MALI  Malignancy, 1 digit 
+#maglinancy as 1 , take other values as NA  
+is.na(AIBL$MH17MALI)<-AIBL$MH17MALI!=1
+AIBL$MH17MALI
+complete.cases(AIBL$MH17MALI)
+mean(is.na(AIBL$MH17MALI))
+AIBL[is.na(AIBL)] = 0
+AIBL$MH17MALI<-as.factor(AIBL$MH17MALI)
+
+
+MH17MALIdata<-AIBL %>%
+  count(MH17MALI) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(MH17MALIdata, 
+       aes(x = reorder(MH17MALI, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MH17MALI", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = MH17MALI, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+MH17MALIDXdata<- data.frame(AIBL$MH17MALI,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+MH17MALIDXdata = table(AIBL$MH17MALI,AIBL$DXCURREN) 
+print(MH17MALIDXdata)
+
+# Perform the Chi-Square test.
+MH17MALIchisq<-chisq.test(MH17MALIDXdata)
+print(MH17MALIchisq)
+
+MH17MALIchisq$p.value
+
+MH17MALIchisq$observed
+MH17MALIchisq$expected
+round(MH17MALIchisq$expected,2)
+#If you want to know the most contributing cells to the total Chi-square score, you just have to calculate the Chi-square statistic for each cell:
+#r=(APGEN1chisq$observed−APGEN1chisq$expected)/√APGEN1chisq$expected , this is the literary explanation  we now do it in R program.
+round(MH17MALIchisq$residuals, 3)
+corrplot(MH17MALIchisq$residuals, is.cor = FALSE)
+contribMH17MALI<- 100*MH17MALIchisq$residuals^2/APGEN1chisq$statistic
+round(contribMH17MALI, 3)
+corrplot(contribMH17MALI, is.cor = FALSE)
+
+```
+
+
+```{r}
+#MMSCORE   Mini Mental State Exam MMSE TOTAL SCORE two digits  0..30, 1 digit 
+AIBL$MMSCORE
+#mmse total score cannot be negative or zero 
+is.na(AIBL$MMSCORE)<-AIBL$MMSCORE<0|AIBL$MMSCORE>30
+AIBL$MMSCORE
+complete.cases(AIBL$MMSCORE)
+mean(is.na(AIBL$MMSCORE))
+#we present this column like this 
+AIBL$MMSCORE<-Hmisc::impute(AIBL$MMSCORE, fun = median)
+
+
+AIBL$MMSCORE
+AIBL$MMSCORE<-as.factor(AIBL$MMSCORE)
+library("ggpubr")
+ggboxplot(AIBL, x = "DXCURREN", y = "MMSCORE", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Mini Mental State Exam MMSE ", xlab = "Diagnosis")
+
+ggplot(AIBL, 
+       aes(x = MMSCORE, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+MMSCOREdata<-AIBL %>%
+  count(MMSCORE) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+MMSCOREdata
+
+ggplot(MMSCOREdata, 
+       aes(x = reorder(MMSCORE, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "MMSCORE", 
+       y = "Percentage", 
+       title  = "Plot of Mini Mental State Exam MMSE  (MMSCORE)")
+
+MMSCOREDXdata = table(AIBL$MMSCORE,AIBL$DXCURREN) 
+print(MMSCOREDXdata)
+
+# Perform the Chi-Square test.
+MMSCOREchisq<-chisq.test(MMSCOREDXdata)
+print(MMSCOREchisq)
+
+MMSCOREchisq$p.value
+
+MMSCOREchisq$observed
+MMSCOREchisq$expected
+round(MMSCOREchisq$expected,2)
+
+round(MMSCOREchisq$residuals, 3)
+```
+
+
+
+```{r}
+AIBL$LIMMTOTAL
+#Logical Memory - Immediate Recall 
+is.na(AIBL$LIMMTOTAL)<-AIBL$LIMMTOTAL<0|AIBL$LIMMTOTAL>25
+AIBL$LIMMTOTAL
+complete.cases(AIBL$LIMMTOTAL)
+mean(is.na(AIBL$LIMMTOTAL))
+AIBL$LIMMTOTAL<-Hmisc::impute(AIBL$LIMMTOTAL, fun = median)
+AIBL$LIMMTOTAL <-as.factor(AIBL$LIMMTOTAL )
+
+library("ggpubr")
+ggboxplot(AIBL, x = "DXCURREN", y = "LIMMTOTAL", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Logical Memory - Immediate Recall", xlab = "Diagnosis")
+
+ggplot(AIBL, 
+       aes(x =LIMMTOTAL, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+LIMMTOTALdata<-AIBL %>%
+  count(LIMMTOTAL ) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+LIMMTOTALdata
+
+ggplot(LIMMTOTALdata, 
+       aes(x = reorder(LIMMTOTAL , -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "LIMMTOTAL ", 
+       y = "Percentage", 
+       title  = "Plot ofLogical Memory - Immediate Recall  (LIMMTOTAL)")
+
+LIMMTOTALDXdata = table(AIBL$LIMMTOTAL ,AIBL$DXCURREN) 
+print(LIMMTOTALDXdata)
+
+# Perform the Chi-Square test.
+LIMMTOTALchisq<-chisq.test(LIMMTOTALDXdata)
+print(LIMMTOTALchisq)
+
+LIMMTOTALchisq$p.value
+
+LIMMTOTALchisq$observed
+LIMMTOTALchisq$expected
+round(LIMMTOTALchisq$expected,2)
+round(LIMMTOTALchisq$residuals, 3)
+```
+
+
+```{r}
+#LDELTOTAL Logical Memory - Delayed Recall <br />Total Number of Story Units Recalled: two digits  0..25, 1 digit 
+#Neurological battery Logical Memory - Delayed Recall
+AIBL$LDELTOTAL 
+is.na(AIBL$LDELTOTAL)<-AIBL$LDELTOTAL<0|AIBL$LDELTOTAL>25
+AIBL$LDELTOTAL 
+complete.cases(AIBL$LDELTOTAL)
+mean(is.na(AIBL$LDELTOTAL))
+AIBL$LDELTOTAL<-Hmisc::impute(AIBL$LDELTOTAL, fun = median)
+AIBL$LDELTOTAL <-as.factor(AIBL$LDELTOTAL )
+library("ggpubr")
+ggboxplot(AIBL, x = "DXCURREN", y = "LDELTOTAL ", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Logical Memory - Delayed Recall ", xlab = "Diagnosis")
+
+ggplot(AIBL, aes(x=LDELTOTAL, 
+                 fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+LDELTOTALdata<-AIBL %>%
+  count(LDELTOTAL ) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+LDELTOTALdata
+
+ggplot(LDELTOTALdata, 
+       aes(x = reorder(LDELTOTAL , -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "LDELTOTAL ", 
+       y = "Percentage", 
+       title  = "Plot of Logical Memory - Delayed Recall  (LDELTOTAL )")
+
+LDELTOTALDXdata = table(AIBL$LDELTOTAL ,AIBL$DXCURREN) 
+print(LDELTOTALDXdata)
+
+# Perform the Chi-Square test.
+LDELTOTALchisq<-chisq.test(LDELTOTALDXdata)
+print(LDELTOTALchisq)
+
+LDELTOTALchisq$p.value
+
+LDELTOTALchisq$observed
+LDELTOTALchisq$expected
+round(LDELTOTALchisq$expected,2)
+round(LDELTOTALchisq$residuals, 3)
+
+
+```
+
+
+```{r}
+#DXNORM  Diagnostic Summary Normal 1= yes , we can assume every other values as 0, 1 digit 
+AIBL$DXNORM
+is.na(AIBL$DXNORM)<-AIBL$DXNORM!=1
+AIBL$DXNORM
+complete.cases(AIBL$DXNORM)
+mean(is.na(AIBL$DXNORM))# na percentage is very high so we drop column
+AIBL[is.na(AIBL)] = 0
+AIBL$DXNORM<-as.factor(AIBL$DXNORM)
+
+DXNORMdata<-AIBL %>%
+  count(DXNORM) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXNORMdata
+
+
+ggplot(DXNORMdata, 
+       aes(x = reorder(DXNORM, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXNORM", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = DXNORM, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXNORMDXdata<- data.frame(AIBL$DXNORM,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXNORMDXdata = table(AIBL$DXNORM,AIBL$DXCURREN) 
+print(DXNORMDXdata)
+
+# Perform the Chi-Square test.
+DXNORMchisq<-chisq.test(DXNORMDXdata)
+print(DXNORMchisq)
+
+DXNORMchisq$p.value
+
+DXNORMchisq$observed
+DXNORMchisq$expected
+round(DXNORMchisq$expected,2)
+round(DXNORMchisq$residuals, 3)
+
+```
+
+
+```{r}
+#DXNODEP Diagnostic Summary Mild Depression 1= yes , we can assume every other values as 0, 1 digit
+AIBL$DXNODEP
+#depression 1 as yes , so we set all other numbers not 1 to 0
+is.na(AIBL$DXNODEP)<-AIBL$DXNODEP!=1
+AIBL$DXNODEP
+complete.cases(AIBL$DXNODEP)
+mean(is.na(AIBL$DXNODEP))
+AIBL[is.na(AIBL)] = 0
+AIBL$DXNODEP<-Hmisc::impute(AIBL$DXNODEP, fun = median)
+AIBL$DXNODEP<-as.factor(AIBL$DXNODEP)
+
+DXNODEPdata<-AIBL %>%
+  count(DXNODEP) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXNODEPdata
+
+
+ggplot(DXNODEPdata, 
+       aes(x = reorder(DXNODEP, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXNODEP", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = DXNODEP, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXNODEPDXdata<- data.frame(AIBL$DXNODEP,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXNODEPDXdata = table(AIBL$DXNODEP,AIBL$DXCURREN) 
+print(DXNODEPDXdata)
+
+# Perform the Chi-Square test.
+DXNODEPchisq<-chisq.test(DXNODEPDXdata)
+print(DXNODEPchisq)
+
+DXNODEPchisq$p.value
+
+DXNODEPchisq$observed
+DXNODEPchisq$expected
+round(DXNODEPchisq$expected,2)
+round(DXNODEPchisq$residuals, 3)
+```
+
+
+```{r}
+#DXMCI   Diagnostic Summary Mild Cognitive Impairment 1= yes , we can assume every other values as 0, 1 digit 
+AIBL$DXMCI
+#mild congnitive imparment as 1 , take other values as NA  
+is.na(AIBL$DXMCI)<-AIBL$DXMCI!=1
+AIBL$DXMCI
+complete.cases(AIBL$DXMCI)
+mean(is.na(AIBL$DXMCI))# Na  value is high o we drop column
+AIBL[is.na(AIBL)] = 0
+AIBL$DXMCI<-as.factor(AIBL$DXMCI)
+
+DXMCIdata<-AIBL %>%
+  count(DXMCI) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXMCIdata
+
+
+ggplot(DXMCIdata, 
+       aes(x = reorder(DXMCI, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXMCI", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = DXMCI, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXMCIDXdata<- data.frame(AIBL$DXMCI,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXMCIDXdata = table(AIBL$DXMCI,AIBL$DXCURREN) 
+print(DXMCIDXdata)
+
+# Perform the Chi-Square test.
+DXMCIchisq<-chisq.test(DXMCIDXdata)
+print(DXMCIchisq)
+
+DXMCIchisq$p.value
+
+DXMCIchisq$observed
+DXMCIchisq$expected
+round(DXMCIchisq$expected,2)
+round(DXMCIchisq$residuals, 3)
+
+
+```
+
+```{r}
+#DXAD    Diagnostic Summary Alzheimer's Disease 1= yes , we can assume every other values as 0, 1 digit 
+AIBL$DXAD
+#Alzermeir disease as 1 or 
+is.na(AIBL$DXAD)<-AIBL$DXAD!=1
+AIBL$DXAD
+complete.cases(AIBL$DXAD)
+mean(is.na(AIBL$DXAD))# na mean is higher than 5% and so high so we drop this colum
+AIBL[is.na(AIBL)] = 0
+AIBL$DXAD<-as.factor(AIBL$DXAD)
+
+DXADdata<-AIBL %>%
+  count(DXAD) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXADdata
+
+
+ggplot(DXADdata, 
+       aes(x = reorder(DXAD, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXAD", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = DXAD, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXADDXdata<- data.frame(AIBL$DXAD,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXADDXdata = table(AIBL$DXAD,AIBL$DXCURREN) 
+print(DXADDXdata)
+
+# Perform the Chi-Square test.
+DXADchisq<-chisq.test(DXADDXdata)
+print(DXADchisq)
+
+DXADchisq$p.value
+
+DXADchisq$observed
+DXADchisq$expected
+round(DXADchisq$expected,2)
+round(DXADchisq$residuals, 3)
+```
+
+```{r}
+#DXPARK  Diagnostic Summary Parkinsonism 1= yes , we can assume every other values as 0, 1 digit 
+#parkisonism as 1 yes and others NA 
+AIBL$DXPARK
+is.na(AIBL$DXPARK)<- AIBL$DXPARK!=1
+complete.cases(AIBL$DXPARK)
+AIBL$DXPARK
+mean(is.na(AIBL$DXPARK)) #Na is so high so we drop tis column
+AIBL[is.na(AIBL)] = 0
+
+AIBL$DXPARK<-as.factor(AIBL$DXPARK)
+
+DXPARKdata<-AIBL %>%
+  count(DXPARK) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXPARKdata
+
+ggplot(DXPARKdata, 
+       aes(x = reorder(DXPARK, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXPARK", 
+       y = "Percentage", 
+       title  = "plot Sample recieved within 24 hours of blood draw ")
+
+ggplot(AIBL, 
+       aes(x = DXPARK, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXPARKDXdata<- data.frame(AIBL$DXPARK,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXPARKDXdata = table(AIBL$DXPARK,AIBL$DXCURREN) 
+print(DXPARKDXdata)
+
+# Perform the Chi-Square test.
+DXPARKchisq<-chisq.test(DXPARKDXdata)
+print(DXPARKchisq)
+
+DXPARKchisq$p.value
+
+DXPARKchisq$observed
+DXPARKchisq$expected
+round(DXPARKchisq$expected,2)
+round(DXPARKchisq$residuals, 3)
+```
+
+```{r}
+#DXOTHDEM Diagnostic Summary Other Dementia (not Alzheimer's Disease) 1= yes , we can assume every other values as 0, 1 digit 
+AIBL$DXOTHDEM
+is.na(AIBL$DXOTHDEM)<-AIBL$DXOTHDEM!=1
+AIBL$DXOTHDEM
+complete.cases(AIBL$DXOTHDEM)
+mean(is.na(AIBL$DXOTHDEM))
+AIBL[is.na(AIBL)] = 0
+AIBL$DXOTHDEM<-as.factor(AIBL$DXOTHDEM)
+AIBL$DXOTHDEM
+DXOTHDEMdata<-AIBL %>%
+  count(DXOTHDEM) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+DXOTHDEMdata
+
+
+ggplot(DXOTHDEMdata, 
+       aes(x = reorder(DXOTHDEM, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "DXOTHDEM", 
+       y = "Percentage", 
+       title  = "Other Dementia  ")
+
+ggplot(AIBL, 
+       aes(x = DXOTHDEM, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+DXOTHDEMDXdata<- data.frame(AIBL$DXOTHDEM,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+DXOTHDEMDXdata = table(AIBL$DXOTHDEM,AIBL$DXCURREN) 
+print(DXOTHDEMDXdata)
+
+# Perform the Chi-Square test.
+DXOTHDEMchisq<-chisq.test(DXOTHDEMDXdata)
+print(DXOTHDEMchisq)
+
+DXOTHDEMchisq$p.value
+
+DXOTHDEMchisq$observed
+DXOTHDEMchisq$expected
+round(DXOTHDEMchisq$expected,2)
+round(DXOTHDEMchisq$residuals, 3)
+```
+
+
+```{r}
+#PTGENDER  Participant Gender 1=Male; 2=Female, 1 digit 
+AIBL$PTGENDER
+#Male= 1 or female=2 from the Dadic dictionary, male , female cannot be negative or 0 or more than 2
+is.na(AIBL$PTGENDER)<-AIBL$PTGENDER!=1& AIBL$PTGENDER !=2
+AIBL$PTGENDER
+complete.cases(AIBL$PTGENDER)
+mean(is.na(AIBL$PTGENDER))
+AIBL$PTGENDER<-as.factor(AIBL$PTGENDER)
+#str(AIBL$PTGENDER)
+
+PTGENDERdata<-AIBL %>%
+  count(PTGENDER) %>%
+  mutate(pct = n / sum(n),
+         pctlabel = paste0(round(pct*100), "%"))
+
+ggplot(PTGENDERdata, 
+       aes(x = reorder(PTGENDER, -pct),
+           y = pct)) + 
+  geom_bar(stat = "identity", 
+           fill = "indianred3", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) +
+  scale_y_continuous(labels = percent) +
+  labs(x = "PTGENDER", 
+       y = "Percentage", 
+       title  = "Participant Gender ")
+
+ggplot(AIBL, 
+       aes(x = PTGENDER, 
+           fill = DXCURREN)) + 
+  geom_bar(position = position_dodge(preserve = "single"))
+
+
+PTGENDERDXdata<- data.frame(AIBL$PTGENDER,AIBL$DXCURREN)
+
+# Create a table with the needed variables.
+PTGENDERDXdata = table(AIBL$PTGENDER,AIBL$DXCURREN) 
+print(PTGENDERDXdata)
+
+# Perform the Chi-Square test.
+PTGENDERchisq<-chisq.test(PTGENDERDXdata)
+print(PTGENDERchisq)
+
+PTGENDERchisq$p.value
+
+PTGENDERchisq$observed
+PTGENDERchisq$expected
+round(PTGENDERchisq$expected,2)
+round(PTGENDERchisq$residuals, 3)
+corrplot(PTGENDERchisq$residuals, is.cor = FALSE)
+contribPTGENDER<- 100*PTGENDERchisq$residuals^2/APGEN1chisq$statistic
+round(contribPTGENDER, 3)
+corrplot(contribPTGENDER, is.cor = FALSE)
+```
+
+
+```{r}
+#PTDOB Participant Date of Birth, 1 digit
+AIBL$PTDOB
+AIBL$PTDOB<-as.numeric(AIBL$PTDOB)
+AIBL$PTDOB
+summary(AIBL$PTDOB)
+ggplot(AIBL, aes(x = PTDOB)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "year of Birth",
+                     breaks = seq(1910,1960 ,5),
+                     limits=c(1910,1960)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("plot of year of Birth") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+
+outlier_values <- boxplot.stats(AIBL$PTDOB)$out# outlier values.
+outlier_values
+boxplot(AIBL$PTDOB, main="Date of Birth", boxwex=0.1)
+
+is.na(AIBL$PTDOB)<-AIBL$PTDOB<1918
+
+complete.cases(AIBL$PTDOB)
+mean(is.na(AIBL$PTDOB))
+AIBL$PTDOB<-Hmisc::impute(AIBL$PTDOB, fun = median)
+AIBL$PTDOB<-as.numeric(AIBL$PTDOB)
+
+summary(AIBL$PTDOB)
+ggplot(AIBL, aes(x = PTDOB)) +
+  geom_density(colour = "green", fill = "#56B4E9") +
+  scale_x_continuous(name = "year of Birth",
+                     breaks = seq(1915,1960 ,3),
+                     limits=c(1916,1960)) +
+  scale_y_continuous(name = "Density") +
+  ggtitle("plot of Date of Birth") +
+  theme(axis.line = element_line(size=1, colour = "black"))
+
+ggplot(data=AIBL, aes(x = PTDOB, y = DXCURREN)) +
+  geom_point(color = "darkorchid4") +
+  labs(title = "plot of Year of Birth",
+       y = "Diagnosis",
+       x = "plot of Year of Birth and Diagnosis") + theme_bw(base_size = 15)
+
+ggboxplot(AIBL, x = "DXCURREN", y = "PTDOB", 
+          color = "DXCURREN", palette = c("#00AFBB", "#E7B800"),
+          order = c("0", "1"),
+          ylab = "Year of Birth", xlab = "Diagnosis")+
+  ggtitle("Diagnosis and Year of Birth")
+
+ggplot(AIBL, 
+       aes(x = PTDOB, 
+           fill = DXCURREN,group =DXCURREN )) + 
+  geom_bar(position = position_dodge(preserve = "single"))+
+  scale_x_continuous(name = "Examination year",
+                     breaks = seq(1918,1960 ,5),
+                     limits=c(1918,1960)) +
+  ggtitle("plot of Year of Birth")
+```
+```{r}
+#install.packages("reshape2")
+library(reshape2)
+AIBL.m <- melt(AIBL,id.vars='DXCURREN')
+#install.packages("lattice")
+ggplot(data = AIBL.m, aes(x=DXCURREN,)) + 
+  geom_boxplot(boxwex=.1,cex.main=2)+
+  theme_classic()+
+  facet_wrap(~variable,ncol =7)+
+  scale_x_discrete(name = "DXCURREN") +
+  ggtitle("Boxplot Healthy 1 and non healthy 0 diagnosis ")
+```
+
+
+```{r}
+AIBL
+#install.packages("corrplot")
+library(corrplot)
+str(AIBL)
+#We write a function to convert our varables to numeric 
+AIBL[]<- lapply(AIBL, function(x) {
+  if(!is.numeric(x)|is.integer(x)) as.numeric(as.character(x)) else x
+})
+
+AIBL$AXT117<-as.numeric(AIBL$AXT117) 
+AIBL$BAT126<-as.numeric(AIBL$BAT126)
+AIBL$RCT6<-as.numeric(AIBL$RCT6)       
+AIBL$RCT11<-as.numeric(AIBL$RCT11)
+AIBL$HMT7<-as.numeric(AIBL$HMT7)
+AIBL$Examdateyear<-as.numeric(AIBL$Examdateyear)
+sapply(AIBL, class)
+
+#We will check for correlation between the viarables and DXCURRREN 
+Ccor1=cor(AIBL, AIBL$DXCURREN)
+Ccor1
+```
+
+```{r}
+library(Hmisc)
+
+#We will check for correlation between the viarables and DXCURRREN 
+# Beeswarm to visualize correlation 
+#par(las=1)
+
+
+#drop all features with NA as correlation.
+AIBL<-dplyr::select(AIBL, -APRECEIVE,-APAMBTEMP,-DXPARK,-DXNODEP,-DXOTHDEM)
+AIBL<-as.matrix(AIBL)
+# Next we use the function below to return a table for  Correlation matrix with significance levels (p-value)
+Correl<-rcorr(AIBL, type = c("pearson","spearman"))
+# Extract the correlation coefficients
+Correl$r
+correlation_values<-as.data.frame(Correl$r)
+correlation_values$DXCURREN<-as.matrix(correlation_values$DXCURREN)
+correlation_values$DXCURREN
+# Extract p-values
+Correl$P 
+P_value<-as.data.frame(Correl$P)
+P_value$DXCURREN<-as.matrix(P_value$DXCURREN)
+P_value$DXCURREN
+```
+
+```{r}
+Correlation_Pvalue<-cbind(correlation_values$DXCURREN,P_value$DXCURREN)  
+Correlation_Pvalue# column 1 is the target column so NA is ignored
+```
+
+#we study correlations among the variables in the data, so as to decide the need for feature selection.
+```{r}
+ #to find out the predictor variables that are strongly correlated to DXCURREN
+AIBL<-as.data.frame(AIBL)
+str(AIBL$DXCURREN) 
+correlations <- cor(AIBL)
+corrplot(correlations, number.cex =1, method = "circle", type = "full", tl.cex=.8,tl.col = "black")
+```
+
+
+```{r}
+#Data preparation, in using random forest to classify and analyse our data. We first use the whole data and apply a Smote to balance our class , then we do a 
+#feature selection and then we apply our smote to balance our target class 
+
+# Check number of rows and columns.
+dim(AIBL)
+str(AIBL)
+# Make dependent variable as a factor (categorical).
+AIBL$DXCURREN <-as.factor(AIBL$DXCURREN)
+AIBL$DXCURREN
+
+# Check types of variables and class sizes.
+table(AIBL$DXCURREN)
+# Splitting the dataset into the Training set and Test set
+#install.packages('caTools')
+library(caTools)
+set.seed(71)
+split = sample.split(AIBL$DXCURREN, SplitRatio = 0.7)
+training_mydata = subset(AIBL, split == TRUE)
+test_mydata = subset(AIBL, split == FALSE)
+
+table(test_mydata$DXCURREN)
+```
+
+```{r}
+
+
+#2.Then we train the classifier to obtain a random forest classifier model.
+
+# Train and tune the random forest (rf) algorithm on the training data.
+library(randomForest)
+AIBL
+# Find the optimal value of mtry.
+set.seed(71) 
+#we remove the highly correlated variables DXCURREN  DXNORM using the grep function to identify their positions
+#grep("DXNORM", colnames(AIBL))
+#grep("DXCURREN", colnames(AIBL))
+mtry <- tuneRF(training_mydata[,-c(1,30)],training_mydata$DXCURREN, ntreeTry=500,
+               stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]),1]
+
+print(mtry)
+print(best.m)
+
+
+
+
+#Apply random forest (rf) with the optimal value of mtry.
+set.seed(71)
+rf <-randomForest(DXCURREN~.,data=training_mydata, mtry=best.m, importance=TRUE,ntree=500)
+print(rf)
+plot(rf)
+
+#Evaluate variable importance
+randomForest::importance(rf)
+varImpPlot(rf)
+
+```
+
+```{r}
+
+#3: Then the classifier is evaluated 
+
+#Predicting the Test set results.
+y_pred = predict(rf, newdata = test_mydata)
+
+# install.packages('MLmetrics')
+library(MLmetrics)
+# Making the Confusion Matrix
+(cm = ConfusionMatrix(y_pred, test_mydata$DXCURREN))
+
+(Classification.Accuracy <- 100*Accuracy(y_pred, test_mydata$DXCURREN))
+#This will predict and calculate our performance metric
+pred1=predict(rf,newdata = test_mydata,type = "prob")
+pred1
+library(ROCR)
+perf = ROCR::prediction(pred1[,2],test_mydata$DXCURREN)
+
+# 0. Accuracy.
+acc = performance(perf, "acc")
+plot(acc,main="Accurcay Curve for Random Forest",col=29,lwd=2)
+
+# 1. Area under curve
+auc = performance(perf, "auc")
+auc@y.values[[1]]
+
+# 2. True Positive and Negative Rate
+pred3 = performance(perf, "tpr","fpr")
+pred3
+
+# 3. we Plot the ROC curve
+plot(pred3,main="ROC Curve for Random Forest",col=3,lwd=3)
+abline(a=0,b=1,lwd=2,lty=3,col="gray")
+
+```
+
+
+
+
+```{r}
+#WE USE THE SMOTE TO BALANCE THE TARGET CLASS 
+#Step I :Data is prepared 
+
+# Check number of rows and columns.
+dim(AIBL)
+# Check types of variables and class sizes.
+
+table(AIBL$DXCURREN)
+
+
+#Carry out class balancing.
+library(DMwR)
+newbalanceddata<- SMOTE(DXCURREN ~ ., AIBL, perc.over = 100,perc.under=200)
+table(newbalanceddata$DXCURREN)
+
+str(AIBL)
+table(AIBL$DXCURREN)
+
+# Splitting the dataset into the Training set and Test set
+#install.packages('caTools')
+library(caTools)
+set.seed(71)
+split = sample.split(newbalanceddata$DXCURREN, SplitRatio = 0.7)
+training_mydata2 = subset(newbalanceddata, split == TRUE)
+test_mydata = subset(newbalanceddata, split == FALSE)
+training_mydata2
+test_mydata
+```
+
+```{r}
+
+#Step II : Train the classifier to obtain a random forest classifier model.
+
+# Train and tune the random forest (rf) algorithm on the training data.
+library(randomForest)
+#floor(sqrt(ncol(training_mydata) - 1))
+# Find the optimal value of mtry.
+set.seed(71) 
+mtry <- tuneRF(training_mydata[-c(1,30)],training_mydata$DXCURREN, ntreeTry=500,
+               stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
+
+print(mtry)
+print(best.m)
+
+#Apply random forest (rf) with the optimal value of mtry.
+set.seed(71)
+rf <-randomForest(DXCURREN~.,data=training_mydata, mtry=best.m, importance=TRUE,ntree=500)
+print(rf)
+plot(rf)
+
+#Evaluate variable importance
+randomForest::importance(rf)
+varImpPlot(rf)
+
+```
+
+```{r}
+
+#Step III: Classifier is evaluated on our Test data 
+
+#Predicting the Test set results.
+y_pred = predict(rf, newdata = test_mydata)
+
+# install.packages('MLmetrics')
+library(MLmetrics)
+# Making the Confusion Matrix
+(cm = ConfusionMatrix(y_pred, test_mydata$DXCURREN))
+
+(Classification.Accuracy <- 100*Accuracy(y_pred, test_mydata$DXCURREN))
+
+
+#Predict and Calculate Performance Metrics.
+
+#Prediction and Calculate Performance Metrics
+pred1=predict(rf,newdata = test_mydata,type = "prob")
+pred1
+library(ROCR)
+perf = ROCR::prediction(pred1[,2], test_mydata$DXCURREN)
+
+# 0. Accuracy.
+acc = performance(perf, "acc")
+plot(acc,main="Accurcay Curve for Random Forest",col=2,lwd=2)
+
+# 1. Area under curve
+auc = performance(perf, "auc")
+auc@y.values[[1]]
+
+# 2. True Positive and Negative Rate
+pred3 = performance(perf, "tpr","fpr")
+
+# 3. Plot the ROC curve
+plot(pred3,main="ROC Curve for Random Forest",col=2,lwd=2)
+abline(a=0,b=1,lwd=2,lty=2,col="gray")
+
+
+
+```
+
+
+
+```{r }
+# what we have done is to apply feature selection to this Data and use the best feature then compare our results to the original data. also export it for machine learning 
+#Let us now apply the feature selection algorithm Boruta.
+AIBL
+library("Boruta")
+set.seed(1)
+Boruta.AIBL <- Boruta(DXCURREN ~ ., data = AIBL,doTrace = 2, ntree = 500)
+
+# Outcome of feature selection. 
+Boruta.AIBL
+
+#Plot the importance of the attributes.
+plot(Boruta.AIBL)
+#One can see that Z score of the most important shadow attribute clearly separates important and non important attributes.
+#Confirming the tentative attributes, if some remained tentative in the initial round.
+Boruta.AIBL.final<-TentativeRoughFix(Boruta.AIBL)
+plot(Boruta.AIBL.final)
+attStats(Boruta.AIBL.final)
+#these features are selected based on the attStats function that creates a data frame containing each attribute's Z score statistics and the fraction of random forest runs in which this attribute was more important than the most important shadow one.
+```
+
+
+```{r}
+str(AIBL)
+grep("CDGLOBAL", colnames(AIBL))
+grep("RCT20", colnames(AIBL))
+grep("LDELTOTAL", colnames(AIBL))
+grep("DXAD", colnames(AIBL))
+grep("LIMMTOTAL", colnames(AIBL))
+grep("MMSCORE", colnames(AIBL))
+grep("DXMCI", colnames(AIBL))
+grep("DXNORM",colnames(AIBL)) 
+AIBL[c(1,4,15,27:32)]
+selectFeatureInd<-c(1,4,15,27:32)
+selectFeatureInd
+selectedFeature <-AIBL[selectFeatureInd]
+str(selectedFeature)
+AIBL.selectFeature <- training_mydata2[,selectFeatureInd]
+str(AIBL.selectFeature)
+
+training_mydata_select = AIBL.selectFeature
+training_mydata_select
+
+```
+
+
+```{r}
+#Lastly We again applied random forest using the smote feature
+#Step I : Data Preparation
+# Check number of rows and columns.
+dim(selectedFeature)
+selectedFeature
+# Check types of variables and class sizes.
+str(selectedFeature)
+table(selectedFeature$DXCURREN)
+#selectedFeature$DXCURREN<-as.factor(selectedFeature$DXCURREN)
+str(selectedFeature$DXCURREN)
+#Carry out class balancing.
+library(DMwR)
+newbalanceddata<- SMOTE(DXCURREN ~ .,selectedFeature, perc.over = 100,perc.under=200)
+table(newbalanceddata$DXCURREN)
+
+
+# Splitting the dataset into the Training set and Test set
+#install.packages('caTools')
+library(caTools)
+set.seed(71)
+split = sample.split(newbalanceddata$DXCURREN, SplitRatio = 0.7)
+training_mydata3 = subset(newbalanceddata, split == TRUE)
+test_mydata3 = subset(newbalanceddata, split == FALSE)
+training_mydata3
+test_mydata3
+```
+
+```{r}
+
+#Step II : Train the classifier to obtain a random forest classifier model.
+
+# Train and tune the random forest (rf) algorithm on the training data.
+library(randomForest)
+
+set.seed(71) 
+selectedFeature
+mtry <-tuneRF(training_mydata3[-c(1,7,9)],training_mydata3$DXCURREN, ntreeTry=500,
+              stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
+
+print(mtry)
+print(best.m)
+
+#Apply random forest (rf) with the optimal value of mtry.
+set.seed(71)
+rf <-randomForest(DXCURREN~.,data=training_mydata3, mtry=best.m, importance=TRUE,ntree=500)
+print(rf)
+plot(rf)
+
+#Evaluate variable importance
+randomForest::importance(rf)
+#importance(rf)
+varImpPlot(rf)
+
+#Step III: Evaluate the classifier on the test data. 
+
+#Predicting the Test set results.
+y_pred = predict(rf, newdata = test_mydata3)
+
+```
+
+
+```{r}
+# install.packages('MLmetrics')
+library(MLmetrics)
+# Making the Confusion Matrix
+(cm = ConfusionMatrix(y_pred, test_mydata3$DXCURREN))
+
+(Classification.Accuracy <- 100*Accuracy(y_pred, test_mydata3$DXCURREN))
+
+
+#Predict and Calculate Performance Metrics.
+
+#Prediction and Calculate Performance Metrics
+pred1=predict(rf,newdata = test_mydata3,type = "prob")
+pred1
+library(ROCR)
+perf = ROCR::prediction(pred1[,2], test_mydata3$DXCURREN)
+
+# 0. Accuracy.
+acc = performance(perf, "acc")
+plot(acc,main="Accurcay Curve for Random Forest",col=2,lwd=2)
+
+# 1. Area under curve
+auc = performance(perf, "auc")
+auc@y.values[[1]]
+
+# 2. True Positive and Negative Rate
+pred3 = performance(perf, "tpr","fpr")
+
+# 3. Plot the ROC curve
+plot(pred3,main="ROC Curve for Random Forest",col=2,lwd=2)
+abline(a=0,b=1,lwd=2,lty=2,col="gray")
+
+```
+
+```{r}
+selectedFeature
+#we export our clean dataset.
+#export_feature<-export(selectedFeature, "AIBLSelect.csv")
+#export_feature# we used this code to Export our Data for Data Modelling and Machine learning
+```
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
